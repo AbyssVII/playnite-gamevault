@@ -3,7 +3,7 @@ Packages:
   - Version: 1.8.1
     RequiredApiVersion: 6.16.0
     ReleaseDate: 2026-09-24
-    PackageUrl: https://github.com/nizh/playnite-gamevault/releases/download/v1.8.1/GameVault_1.8.1.pext
+    PackageUrl: https://github.com/AbyssVII/playnite-gamevault/releases/download/v1.8.1/GameVault_1.8.1.pext
     Changelog:
       - 首个公开发布版本 / Initial public release.
       - 侧边栏「游戏库存」视图：顶部概览条 + 网格/条形双视图 + 实时搜索。

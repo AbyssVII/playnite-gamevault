@@ -7,8 +7,8 @@ Type: GenericPlugin
 Icon: icon.png
 Links:
   - Name: GitHub
-    Url: https://github.com/nizh/playnite-gamevault
+    Url: https://github.com/AbyssVII/playnite-gamevault
   - Name: Report issues
-    Url: https://github.com/nizh/playnite-gamevault/issues
+    Url: https://github.com/AbyssVII/playnite-gamevault/issues
   - Name: Playnite
     Url: https://playnite.link/
