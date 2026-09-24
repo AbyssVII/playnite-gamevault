@@ -1,7 +1,7 @@
-Id: 7f3a91c4-6e28-4d15-b0aa-4c19d7e53b82
+Id: GameVault-plugin
 Name: GameVault 游戏库存
-Author: nizh
-Version: 1.8.1
+Author: AbyssVII
+Version: 1.0.0
 Module: GameVault.dll
 Type: GenericPlugin
 Icon: icon.png
@@ -10,5 +10,3 @@ Links:
     Url: https://github.com/AbyssVII/playnite-gamevault
   - Name: Report issues
     Url: https://github.com/AbyssVII/playnite-gamevault/issues
-  - Name: Playnite
-    Url: https://playnite.link/
