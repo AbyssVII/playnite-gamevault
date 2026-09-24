@@ -47,6 +47,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: GameVault-dll
+          path: .
+
+      - name: 确认产物到位
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "GameVault.dll")) {
+            Write-Host "工作区内容："
+            Get-ChildItem -Recurse -File | Select-Object -First 30 -ExpandProperty FullName
+            throw "GameVault.dll 不在工作区根目录，下载产物这一步可能有问题"
+          }
+          Write-Host "GameVault.dll 已就位（$((Get-Item GameVault.dll).Length) 字节）"
 
       # extension.yaml 里的版本号以 git tag 为唯一来源，避免两边不一致。
       - name: 同步版本号到 extension.yaml
@@ -58,8 +69,28 @@ jobs:
           [System.IO.File]::WriteAllText("$PWD/extension.yaml", $content)
           Write-Host "extension.yaml 版本号 -> $ver"
 
+      # 用 PowerShell 打包，不依赖 runner 上的 python 命令
+      # （原先调用 python scripts/package.py 就是在这里失败的）。
+      # 先把三个文件摊平到临时目录，保证它们位于压缩包根目录。
       - name: 打包 .pext
-        run: python scripts/package.py --dll GameVault.dll
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          $out = "GameVault_$ver.pext"
+
+          Remove-Item "_pkg" -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path "_pkg" | Out-Null
+          Copy-Item extension.yaml, icon.png -Destination "_pkg"
+          Copy-Item GameVault.dll -Destination "_pkg"
+
+          Remove-Item $out -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path "_pkg\*" -DestinationPath "$out.zip" -Force
+          Move-Item "$out.zip" $out -Force
+          Remove-Item "_pkg" -Recurse -Force
+
+          if (-not (Test-Path $out)) { throw "打包失败：未生成 $out" }
+          Write-Host "已生成 $out（$((Get-Item $out).Length) 字节）"
+          Get-ChildItem $out | Select-Object Name, Length | Format-Table
 
       - name: 创建 GitHub Release
         shell: pwsh
