@@ -1,7 +1,7 @@
 AddonId: 7f3a91c4-6e28-4d15-b0aa-4c19d7e53b82
 Type: Generic
 Name: "GameVault 游戏库存"
-Author: nizh
+Author: AbyssVII
 ShortDescription: "A visual game-library vault for Playnite: sort by total or last-2-weeks playtime, merge multi-platform copies of the same game, browse in grid or bar view. / 为 Playnite 提供小黑盒风格的库存视图，支持总时长与近两周时长排序、多平台副本合并、网格与条形双视图。"
 InstallerManifestUrl: https://raw.githubusercontent.com/AbyssVII/playnite-gamevault/main/manifests/installer.yaml
 SourceUrl: https://github.com/AbyssVII/playnite-gamevault

@@ -166,4 +166,4 @@ Once merged, users can find and install GameVault — with automatic updates —
 
 ## License
 
-[MIT](LICENSE) © 2026 nizh
+[MIT](LICENSE) © 2026 AbyssVII

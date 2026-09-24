@@ -167,4 +167,4 @@ python scripts/check_manifests.py
 
 ## 许可
 
-[MIT](LICENSE) © 2026 nizh
+[MIT](LICENSE) © 2026 AbyssVII
