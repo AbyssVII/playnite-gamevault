@@ -1,13 +1,19 @@
 name: Build & Release
 
-# 每次推送到 main / 提 PR 先验证能否编译；打 v* 标签则自动打包并发布 Release。
-# 发布流程见 README「发布新版本」一节。
+# 推送到 main / 提 PR        → 只做编译检查
+# 推送 v* 标签               → 编译并自动发布 Release
+# 在 Actions 页面手动运行     → 填一个版本号即可发布（不需要动 git 标签）
 on:
   push:
     branches: [main]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "要发布的版本号（例如 1.0.0）；留空则只编译不发布"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -38,10 +44,25 @@ jobs:
   release:
     name: 打包并发布 .pext
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # 推送标签，或在 Actions 页面手动运行并填了版本号时才发布。
+    # 这里显式判断 event_name，避免其他事件下 inputs 为空导致的误判。
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      # 版本号有两个来源：推送标签时取标签名，手动运行时取填写的输入。
+      - name: 确定版本号
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.event.inputs.version }}"
+          if (-not $v) { $v = "${{ github.ref_name }}".TrimStart('v') }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "tag=v$v" >> $env:GITHUB_OUTPUT
+          Write-Host "本次发布的版本号为 $v"
 
       - name: 下载编译产物
         uses: actions/download-artifact@v4
@@ -59,24 +80,22 @@ jobs:
           }
           Write-Host "GameVault.dll 已就位（$((Get-Item GameVault.dll).Length) 字节）"
 
-      # extension.yaml 里的版本号以 git tag 为唯一来源，避免两边不一致。
       - name: 同步版本号到 extension.yaml
         shell: pwsh
         run: |
-          $ver = "${{ github.ref_name }}".TrimStart('v')
+          $ver = "${{ steps.ver.outputs.version }}"
           $content = Get-Content extension.yaml -Raw
           $content = $content -replace '(?m)^Version:.*$', "Version: $ver"
           [System.IO.File]::WriteAllText("$PWD/extension.yaml", $content)
           Write-Host "extension.yaml 版本号 -> $ver"
 
       # 用 PowerShell 打包，不依赖 runner 上的 python 命令
-      # （原先调用 python scripts/package.py 就是在这里失败的）。
+      #（原先调用 python scripts/package.py 就是在这里失败的）。
       # 先把三个文件摊平到临时目录，保证它们位于压缩包根目录。
       - name: 打包 .pext
         shell: pwsh
         run: |
-          $ver = "${{ github.ref_name }}".TrimStart('v')
-          $out = "GameVault_$ver.pext"
+          $out = "GameVault_${{ steps.ver.outputs.version }}.pext"
 
           Remove-Item "_pkg" -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path "_pkg" | Out-Null
@@ -92,11 +111,13 @@ jobs:
           Write-Host "已生成 $out（$((Get-Item $out).Length) 字节）"
           Get-ChildItem $out | Select-Object Name, Length | Format-Table
 
+      # 标签已存在时 GitHub 会复用它；不存在（手动运行的情况）则按当前提交创建。
       - name: 创建 GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = "${{ steps.ver.outputs.tag }}"
           $file = (Get-ChildItem "GameVault_*.pext" | Select-Object -First 1).Name
-          gh release create $tag $file --title $tag --generate-notes
+          Write-Host "创建 Release：$tag（附件 $file）"
+          gh release create $tag $file --title $tag --generate-notes --target "${{ github.sha }}"
