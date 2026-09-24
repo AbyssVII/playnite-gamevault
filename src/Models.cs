@@ -1,0 +1,535 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+
+namespace GameVault
+{
+    public static class TimeFmt
+    {
+        /// <summary>简短格式，只用 h / m，不用天。</summary>
+        public static string Short(ulong seconds)
+        {
+            if (seconds <= 0) return "—";
+            var ts = TimeSpan.FromSeconds(seconds);
+            if (ts.TotalMinutes < 1) return "<1m";
+            var hours = (int)ts.TotalHours;
+            if (hours < 1) return ts.Minutes + "m";
+            return ts.Minutes == 0 ? hours + "h" : hours + "h " + ts.Minutes + "m";
+        }
+
+        /// <summary>完整格式，只用小时 / 分钟（跟随界面语言）。</summary>
+        public static string Long(ulong seconds)
+        {
+            if (seconds <= 0) return L10n.T("LocNotPlayed");
+            var ts = TimeSpan.FromSeconds(seconds);
+            if (ts.TotalMinutes < 1) return "<1m";
+            var hours = (int)ts.TotalHours;
+            if (hours < 1) return L10n.F("LocMinutes", ts.Minutes);
+            if (ts.Minutes == 0) return L10n.F("LocHoursOnly", hours);
+            return L10n.F("LocHoursMinutes", hours, ts.Minutes);
+        }
+    }
+
+    public static class StoreVisual
+    {
+        // 来源名称 -> (显示名, 徽章配色)
+        private static readonly Dictionary<string, string[]> Map = new Dictionary<string, string[]>
+        {
+            { "steam",       new[] { "Steam",    "#66C0F4" } },
+            { "epic",        new[] { "Epic",     "#D9D9D9" } },
+            { "xbox",        new[] { "Xbox",     "#9BCB3C" } },
+            { "microsoft",   new[] { "Xbox",     "#9BCB3C" } },
+            { "ea",          new[] { "EA app",   "#FF6B57" } },
+            { "origin",      new[] { "EA app",   "#FF6B57" } },
+            { "ubisoft",     new[] { "Uplay",    "#4CC2FF" } },
+            { "uplay",       new[] { "Uplay",    "#4CC2FF" } },
+            { "gog",         new[] { "GOG",      "#B48BFF" } },
+            { "playstation", new[] { "PSN",      "#5B8DEF" } },
+            { "nintendo",    new[] { "Nintendo", "#FF5C6C" } },
+            { "battle.net",  new[] { "战网",      "#3FA9F5" } },
+            { "battlenet",   new[] { "战网",      "#3FA9F5" } },
+            { "amazon",      new[] { "Amazon",   "#FFA53C" } },
+            { "itch",        new[] { "itch.io",  "#FF7A7A" } },
+            { "rockstar",    new[] { "RGL",      "#F5C542" } },
+        };
+
+        public static string DisplayName(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return null;
+            var key = raw.ToLowerInvariant();
+            foreach (var kv in Map)
+                if (key.Contains(kv.Key)) return kv.Value[0];
+            return raw;
+        }
+
+        public static string Color(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "#8B98A5";
+            var key = raw.ToLowerInvariant();
+            foreach (var kv in Map)
+                if (key.Contains(kv.Key)) return kv.Value[1];
+            return "#8B98A5";
+        }
+    }
+
+    /// <summary>
+    /// 图片缓存 + 后台异步解码。封面/海报在后台线程解码并 Freeze 后回传 UI 线程，
+    /// 避免打开视图时同步解码大量图片造成的卡顿。
+    /// </summary>
+    public static class ImageCache
+    {
+        private static readonly Dictionary<string, ImageSource> Cache = new Dictionary<string, ImageSource>();
+        private static readonly Dictionary<string, List<Action<ImageSource>>> Waiters =
+            new Dictionary<string, List<Action<ImageSource>>>();
+        private static readonly object Lock = new object();
+        private static readonly SemaphoreSlim Gate = new SemaphoreSlim(4);
+
+        public static ImageSource TryGet(string path, int decodeWidth)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            lock (Lock)
+            {
+                ImageSource cached;
+                return Cache.TryGetValue(Key(path, decodeWidth), out cached) ? cached : null;
+            }
+        }
+
+        public static void LoadAsync(string path, int decodeWidth, Action<ImageSource> callback)
+        {
+            if (callback == null) return;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                callback(null);
+                return;
+            }
+
+            var key = Key(path, decodeWidth);
+            var start = false;
+            lock (Lock)
+            {
+                ImageSource cached;
+                if (Cache.TryGetValue(key, out cached))
+                {
+                    callback(cached);
+                    return;
+                }
+                List<Action<ImageSource>> list;
+                if (!Waiters.TryGetValue(key, out list))
+                {
+                    list = new List<Action<ImageSource>>();
+                    Waiters[key] = list;
+                    start = true;
+                }
+                list.Add(callback);
+            }
+
+            if (!start) return;
+
+            _ = Task.Run(async () =>
+            {
+                ImageSource image = null;
+                try
+                {
+                    // 用 WaitAsync 限流，避免大量解码任务把线程池线程全占住
+                    await Gate.WaitAsync().ConfigureAwait(false);
+                    try
+                    {
+                        image = Decode(path, decodeWidth);
+                    }
+                    finally
+                    {
+                        Gate.Release();
+                    }
+                }
+                catch
+                {
+                }
+
+                List<Action<ImageSource>> callbacks;
+                lock (Lock)
+                {
+                    if (image != null) Cache[key] = image;
+                    callbacks = Waiters.ContainsKey(key) ? Waiters[key] : new List<Action<ImageSource>>();
+                    Waiters.Remove(key);
+                }
+
+                var app = Application.Current;
+                if (app == null)
+                {
+                    // 没有 WPF Application（例如离线自检）时直接回调，避免回调被静默丢掉
+                    Dispatch(callbacks, image);
+                    return;
+                }
+                _ = app.Dispatcher.BeginInvoke(new Action(() => Dispatch(callbacks, image)));
+            });
+        }
+
+        private static void Dispatch(List<Action<ImageSource>> callbacks, ImageSource image)
+        {
+            foreach (var cb in callbacks)
+            {
+                try
+                {
+                    cb(image);
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static string Key(string path, int decodeWidth)
+        {
+            return decodeWidth + "|" + path;
+        }
+
+        private static ImageSource Decode(string path, int decodeWidth)
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource = new Uri(path, UriKind.Absolute);
+            bmp.DecodePixelWidth = decodeWidth;
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+    }
+
+    /// <summary>Metacritic 评分的配色。</summary>
+    public static class ScorePalette
+    {
+        public const string NoScore = "#5A6673";
+        public const string Low = "#EF4444";     // < 60  红
+        public const string Fair = "#FACC15";    // 60-69 黄
+        public const string Good = "#F97316";    // 70-79 橙
+        public const string Great = "#22C55E";   // 80-89 绿
+        public const string Top = "#FFD700";     // 90+   动态流彩的起始色
+
+        // 90+ 的循环配色：金 → 青 → 紫 → 粉 → 绿
+        private static readonly Color[] Rainbow =
+        {
+            Color.FromRgb(0xFF, 0xD7, 0x00),
+            Color.FromRgb(0x4C, 0xC2, 0xFF),
+            Color.FromRgb(0xA7, 0x8B, 0xFA),
+            Color.FromRgb(0xF4, 0x72, 0xB6),
+            Color.FromRgb(0x4A, 0xDE, 0x80),
+        };
+
+        private static readonly Dictionary<string, SolidColorBrush> Cache =
+            new Dictionary<string, SolidColorBrush>();
+        private static readonly object Sync = new object();
+
+        private static double phase;
+
+        /// <summary>
+        /// 按 5 个彩虹色依次填充渐变色标（首尾同色 + SpreadMethod.Repeat = 无缝循环）。
+        /// 这样同一时刻元素上会同时出现好几种颜色，而不是"一个颜色渐变到另一个颜色"。
+        /// </summary>
+        public static void FillFlowStops(GradientStopCollection stops)
+        {
+            var n = Rainbow.Length;
+            for (var i = 0; i < n; i++)
+                stops.Add(new GradientStop(Rainbow[i], (double)i / n));
+            stops.Add(new GradientStop(Rainbow[0], 1.0));
+        }
+
+        /// <summary>取（并缓存）冻结的静态画刷，避免每个卡片都新建一个。</summary>
+        public static SolidColorBrush Get(string hex)
+        {
+            lock (Sync)
+            {
+                SolidColorBrush brush;
+                if (Cache.TryGetValue(hex, out brush)) return brush;
+                brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+                brush.Freeze();
+                Cache[hex] = brush;
+                return brush;
+            }
+        }
+
+        /// <summary>推进彩虹流动的相位（0→1 循环）。60ms 一帧、每帧 +0.035 → 约 1.7 秒走一轮。</summary>
+        public static double NextPhase()
+        {
+            phase += 0.035;
+            if (phase >= 1) phase -= 1;
+            return phase;
+        }
+    }
+
+    /// <summary>库存中的一条游戏记录（同一名称的多个平台副本会被合并）</summary>
+    public class GameEntry : INotifyPropertyChanged
+    {
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private const int CoverWidth = 220;
+        private const int PosterWidth = 640;
+
+        private ImageSource cover;
+        private ImageSource poster;
+        private LinearGradientBrush animatedBrush;
+        private TranslateTransform flowTransform;
+        private bool coverRequested;
+        private bool posterRequested;
+        private double recentPercent;
+        private double totalPercent;
+
+        public Guid PrimaryId { get; set; }
+        public string Name { get; set; }
+        public ulong TotalPlaytime { get; set; }
+        public ulong RecentPlaytime { get; set; }
+
+        public string CoverPath { get; set; }
+        public string PosterPath { get; set; }
+        public string IconPath { get; set; }
+
+        public int? CriticScore { get; set; }
+        public int? UserScore { get; set; }
+        public int? CommunityScore { get; set; }
+
+        public string Developers { get; set; }
+        public string Publishers { get; set; }
+        public string Genres { get; set; }
+        public string Description { get; set; }
+
+        public List<string> Stores { get; set; } = new List<string>();
+        public List<string> Devices { get; set; } = new List<string>();
+
+        public DateTime? LastActivity { get; set; }
+        public DateTime? ReleaseDate { get; set; }
+        public DateTime? Added { get; set; }
+        public bool IsInstalled { get; set; }
+        public bool Favorite { get; set; }
+        public int Copies { get; set; } = 1;
+
+        // ---- 展示属性 ----
+        public string TotalText => TimeFmt.Short(TotalPlaytime);
+        public string RecentText => RecentPlaytime > 0 ? TimeFmt.Short(RecentPlaytime) : "—";
+        public string RecentLongText => TimeFmt.Long(RecentPlaytime);
+        public string TotalLongText => TimeFmt.Long(TotalPlaytime);
+
+        public bool HasRecent => RecentPlaytime > 0;
+        public bool HasScore => CriticScore.HasValue && CriticScore.Value > 0;
+        public string ScoreText => HasScore ? CriticScore.Value.ToString(CultureInfo.InvariantCulture) : "—";
+
+        /// <summary>评分档位：5=90+ / 4=80-89 / 3=70-79 / 2=60-69 / 1=&lt;60 / 0=无评分</summary>
+        public int ScoreTier
+        {
+            get
+            {
+                if (!HasScore) return 0;
+                var s = CriticScore.Value;
+                if (s >= 90) return 5;
+                if (s >= 80) return 4;
+                if (s >= 70) return 3;
+                if (s >= 60) return 2;
+                return 1;
+            }
+        }
+
+        public bool IsTopTier => ScoreTier == 5;
+
+        public string ScoreColor
+        {
+            get
+            {
+                switch (ScoreTier)
+                {
+                    case 5: return ScorePalette.Top;
+                    case 4: return ScorePalette.Great;
+                    case 3: return ScorePalette.Good;
+                    case 2: return ScorePalette.Fair;
+                    case 1: return ScorePalette.Low;
+                    default: return ScorePalette.NoScore;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 评分画刷。90+ 返回一条**横向彩虹渐变**（金/青/紫/粉/绿同屏，
+        /// 并靠 RelativeTransform 平移 + SpreadMethod.Repeat 无缝流动），
+        /// 其余档位是共享的冻结单色画刷。
+        /// </summary>
+        public Brush ScoreBrush
+        {
+            get
+            {
+                if (ScoreTier != 5) return ScorePalette.Get(ScoreColor);
+
+                if (animatedBrush == null)
+                {
+                    flowTransform = new TranslateTransform(0, 0);
+                    var gradient = new LinearGradientBrush
+                    {
+                        StartPoint = new Point(0, 0),
+                        EndPoint = new Point(1, 0),
+                        SpreadMethod = GradientSpreadMethod.Repeat,
+                        RelativeTransform = flowTransform
+                    };
+                    ScorePalette.FillFlowStops(gradient.GradientStops);
+                    animatedBrush = gradient;
+                }
+                return animatedBrush;
+            }
+        }
+
+        /// <summary>由视图的定时器驱动彩虹流动（未渲染过的卡片直接跳过）。</summary>
+        public void ApplyFlow(double phase)
+        {
+            if (flowTransform != null) flowTransform.X = phase;
+        }
+
+        /// <summary>开发商 · 发行商，用于条形视图直接展示。</summary>
+        public string DevPubText
+        {
+            get
+            {
+                var unknown = L10n.T("LocUnknown");
+                var dev = string.IsNullOrWhiteSpace(Developers) ? unknown : Developers;
+                var pub = string.IsNullOrWhiteSpace(Publishers) ? unknown : Publishers;
+                return dev == pub ? dev : dev + " · " + pub;
+            }
+        }
+
+        public string StoreList => Stores.Count > 0
+            ? string.Join(" · ", Stores.Select(StoreVisual.DisplayName))
+            : (Devices.Count > 0 ? string.Join(" · ", Devices) : "本地");
+        public string DeviceList => Devices.Count > 0 ? string.Join(" · ", Devices) : "";
+        public string ReleaseText => ReleaseDate.HasValue ? ReleaseDate.Value.ToString("yyyy-MM-dd") : "";
+        public string LastPlayedText => LastActivity.HasValue
+            ? LastActivity.Value.ToString("yyyy-MM-dd")
+            : L10n.T("LocNeverPlayed");
+
+        public double RecentPercent
+        {
+            get { return recentPercent; }
+            set
+            {
+                if (Math.Abs(recentPercent - value) < 0.01) return;
+                recentPercent = value;
+                Raise("RecentPercent");
+            }
+        }
+
+        public double TotalPercent
+        {
+            get { return totalPercent; }
+            set
+            {
+                if (Math.Abs(totalPercent - value) < 0.01) return;
+                totalPercent = value;
+                Raise("TotalPercent");
+            }
+        }
+
+        /// <summary>封面：命中缓存直接返回，否则触发后台解码，完成后通知绑定刷新。</summary>
+        public ImageSource Cover
+        {
+            get
+            {
+                if (cover != null) return cover;
+                if (coverRequested) return null;
+                coverRequested = true;
+                var direct = ImageCache.TryGet(CoverPath, CoverWidth);
+                if (direct != null)
+                {
+                    cover = direct;
+                    return cover;
+                }
+                ImageCache.LoadAsync(CoverPath, CoverWidth, src =>
+                {
+                    cover = src;
+                    Raise("Cover");
+                });
+                return null;
+            }
+        }
+
+        /// <summary>海报（只有悬停展开时才请求，避免无谓解码）。</summary>
+        public ImageSource Poster
+        {
+            get
+            {
+                if (poster != null) return poster;
+                if (posterRequested) return null;
+                posterRequested = true;
+                var direct = ImageCache.TryGet(PosterPath, PosterWidth)
+                             ?? ImageCache.TryGet(CoverPath, PosterWidth);
+                if (direct != null)
+                {
+                    poster = direct;
+                    return poster;
+                }
+                ImageCache.LoadAsync(PosterPath ?? CoverPath, PosterWidth, src =>
+                {
+                    if (src != null || string.IsNullOrEmpty(CoverPath) || CoverPath == PosterPath)
+                    {
+                        poster = src;
+                        Raise("Poster");
+                        return;
+                    }
+                    // 背景图不可用（不存在或损坏）时再退回封面，保证浮层里总有图
+                    ImageCache.LoadAsync(CoverPath, PosterWidth, cover =>
+                    {
+                        poster = cover;
+                        Raise("Poster");
+                    });
+                });
+                return null;
+            }
+        }
+
+        public ImageSource Icon => ImageCache.TryGet(IconPath, 48);
+
+        public List<StoreBadge> Badges
+        {
+            get
+            {
+                var list = new List<StoreBadge>();
+                foreach (var s in Stores)
+                    list.Add(new StoreBadge { Label = StoreVisual.DisplayName(s), Color = StoreVisual.Color(s) });
+                return list;
+            }
+        }
+
+        public string SearchBlob { get; set; }
+
+        private void Raise(string name)
+        {
+            var handler = PropertyChanged;
+            if (handler != null) handler(this, new PropertyChangedEventArgs(name));
+        }
+    }
+
+    public class StoreBadge
+    {
+        public string Label { get; set; }
+        public string Color { get; set; }
+    }
+
+    public static class NameKey
+    {
+        public static string Normalize(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "";
+            var sb = new StringBuilder();
+            var normalized = name.ToLowerInvariant();
+            for (var i = 0; i < normalized.Length; i++)
+            {
+                var c = normalized[i];
+                if (char.IsLetterOrDigit(c)) sb.Append(c);
+            }
+            return sb.ToString();
+        }
+    }
+}

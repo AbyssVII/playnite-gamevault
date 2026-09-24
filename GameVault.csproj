@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>GameVault</AssemblyName>
+    <RootNamespace>GameVault</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+  </PropertyGroup>
+
+  <!--
+    引用 Playnite.SDK.dll 的两条路径：
+      1) 本机装了 Playnite  → 用安装目录里的 SDK（自动探测 F:\Playnite，
+                              也可用 dotnet build -p:PlayniteSdkPath=你的路径\Playnite.SDK.dll 覆盖）
+      2) 没有安装（如 CI）  → 回退到 NuGet 上的官方 PlayniteSDK 包，版本与本机 SDK 对齐
+  -->
+  <PropertyGroup>
+    <!-- 加 -p:UseNuGetSdk=true 可强制走 NuGet 包（用于在没装 Playnite 的机器上验证 CI 构建） -->
+    <PlayniteSdkPath Condition="'$(PlayniteSdkPath)' == '' AND '$(UseNuGetSdk)' != 'true' AND Exists('F:\Playnite\Playnite.SDK.dll')">F:\Playnite\Playnite.SDK.dll</PlayniteSdkPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src/*.cs" />
+    <EmbeddedResource Include="src/VaultView.xaml" LogicalName="GameVault.VaultView.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="PresentationFramework" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+
+  <!-- 路径 1：本机 Playnite 安装目录里的 SDK -->
+  <ItemGroup Condition="'$(PlayniteSdkPath)' != ''">
+    <Reference Include="Playnite.SDK">
+      <HintPath>$(PlayniteSdkPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- 路径 2：CI / 无 Playnite 环境，走 NuGet 官方包（ExcludeAssets=runtime 避免把 SDK 打进插件） -->
+  <ItemGroup Condition="'$(PlayniteSdkPath)' == ''">
+    <PackageReference Include="PlayniteSDK" Version="6.16.0">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,71 @@
+name: Build & Release
+
+# 每次推送到 main / 提 PR 先验证能否编译；打 v* 标签则自动打包并发布 Release。
+# 发布流程见 README「发布新版本」一节。
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 构建 (net48)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # 构建机上没有安装 Playnite，csproj 会自动回退到 NuGet 的官方
+      # PlayniteSDK 包（见 GameVault.csproj 里 PlayniteSdkPath 的判断）。
+      - name: 编译
+        run: dotnet build -c Release -p:UseNuGetSdk=true
+
+      - name: 上传编译产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: GameVault-dll
+          path: bin/Release/GameVault.dll
+
+  release:
+    name: 打包并发布 .pext
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载编译产物
+        uses: actions/download-artifact@v4
+        with:
+          name: GameVault-dll
+
+      # extension.yaml 里的版本号以 git tag 为唯一来源，避免两边不一致。
+      - name: 同步版本号到 extension.yaml
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          $content = Get-Content extension.yaml -Raw
+          $content = $content -replace '(?m)^Version:.*$', "Version: $ver"
+          [System.IO.File]::WriteAllText("$PWD/extension.yaml", $content)
+          Write-Host "extension.yaml 版本号 -> $ver"
+
+      - name: 打包 .pext
+        run: python scripts/package.py --dll GameVault.dll
+
+      - name: 创建 GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $file = (Get-ChildItem "GameVault_*.pext" | Select-Object -First 1).Name
+          gh release create $tag $file --title $tag --generate-notes

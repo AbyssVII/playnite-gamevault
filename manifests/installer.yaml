@@ -1,0 +1,15 @@
+AddonId: 7f3a91c4-6e28-4d15-b0aa-4c19d7e53b82
+Packages:
+  - Version: 1.8.1
+    RequiredApiVersion: 6.16.0
+    ReleaseDate: 2026-09-24
+    PackageUrl: https://github.com/nizh/playnite-gamevault/releases/download/v1.8.1/GameVault_1.8.1.pext
+    Changelog:
+      - 首个公开发布版本 / Initial public release.
+      - 侧边栏「游戏库存」视图：顶部概览条 + 网格/条形双视图 + 实时搜索。
+      - 支持按总时长、近两周时长、Metacritic 评分排序。
+      - 同一游戏的多平台副本按名称合并，显示来源徽章，时长累加。
+      - 悬停卡片显示完整海报、Metacritic 评分、开发商、发行商与时长明细。
+      - 右下角可拖动缩放条，实时重排列数，尺寸跨会话保留。
+      - 中英双语界面，可在插件内即时切换。
+      - Metacritic 五档配色，90 分以上为流光溢彩的动态彩虹渐变。

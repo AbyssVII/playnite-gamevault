@@ -1,0 +1,23 @@
+# ---------- 构建产物 ----------
+bin/
+obj/
+*.suo
+*.user
+*.userprefs
+.vs/
+.vscode/*.log
+
+# ---------- 本地自检产物 ----------
+# 离线渲染器输出的界面截图（本地调试用，不入库）
+_render/
+_apiver.txt
+
+# ---------- 打包产物 ----------
+# .pext 安装包通过 GitHub Release 分发，不入库
+*.pext
+dist/
+
+# ---------- 系统垃圾 ----------
+Thumbs.db
+desktop.ini
+.DS_Store
