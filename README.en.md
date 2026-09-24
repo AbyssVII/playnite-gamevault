@@ -135,6 +135,22 @@ Pushing a tag makes GitHub Actions build, rewrite `Version` in `extension.yaml` 
 >
 > CI runners have no Playnite installed, so `GameVault.csproj` falls back to the official `PlayniteSDK` NuGet package automatically. No extra CI configuration is needed.
 
+After changing any manifest, run the self-check (required fields, version numbers, AddonId, repository URL consistency):
+
+```bash
+pip install pyyaml
+python scripts/check_manifests.py
+```
+
+### Submitting to the official add-on database
+
+The two manifests under `manifests/` are for [PlayniteAddonDatabase](https://github.com/JosefNemec/PlayniteAddonDatabase):
+
+- `manifests/GameVault_<Id>.yaml` — **submit this one**, placed under `addons/generic/` in that repository, as a pull request
+- `manifests/installer.yaml` — stays in this repository; the file above references it via `InstallerManifestUrl`
+
+Once merged, users can find and install GameVault — with automatic updates — directly from Playnite's add-on browser.
+
 ## Implementation notes
 
 - **Must be compiled as `net48`.** Playnite 10.x is a .NET Framework application whose `Playnite.SDK.dll` references `mscorlib` / `System.Xaml` 4.0.0.0 — it cannot be used from .NET 8/9.

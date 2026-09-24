@@ -136,6 +136,22 @@ git push origin main --tags
 >
 > CI 构建机上没有 Playnite，`GameVault.csproj` 会自动回退到 NuGet 上的官方 `PlayniteSDK` 包，因此云端构建无需任何额外配置。
 
+改动清单后建议自检一遍（校验必填字段、版本号、AddonId、仓库地址是否自洽）：
+
+```bash
+pip install pyyaml
+python scripts/check_manifests.py
+```
+
+### 提交到官方扩展库
+
+`manifests/` 下那两份清单是为 [PlayniteAddonDatabase](https://github.com/JosefNemec/PlayniteAddonDatabase) 准备的：
+
+- `manifests/GameVault_<Id>.yaml` —— **提交给官方库**，放到该仓库的 `addons/generic/` 目录下提 PR
+- `manifests/installer.yaml` —— 留在本仓库，供上面那份的 `InstallerManifestUrl` 引用
+
+审核合并后，其他用户就能在 Playnite 的扩展浏览器里搜到并一键安装、自动更新。
+
 ## 技术说明
 
 - **必须编译为 `net48`。** Playnite 10.x 是 .NET Framework 应用，其 `Playnite.SDK.dll` 引用 `mscorlib` / `System.Xaml` 4.0.0.0，不能用 .NET 8/9 编译。
