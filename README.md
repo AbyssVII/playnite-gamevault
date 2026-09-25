@@ -120,23 +120,38 @@ python scripts/package.py
 
 ## 发布新版本
 
-版本号以 **git tag 为唯一来源**，CI 会自动把它同步进 `extension.yaml` 并打包发布：
+假设要发布 `1.0.1`，一共三件事：
 
 ```bash
+# 1) 改代码并推送到 main
 git add -A
-git commit -m "feat: 某个新功能"
+git commit -m "fix: 修复 xxx"
+git push origin main
 
-git tag v1.8.2          # 标签号就是发布版本号
-git push origin main --tags
+# 2) 把新版本写进安装清单（官方扩展库靠它判断有没有新版本）
+python scripts/add-release.py 1.0.1 --changelog "修复 xxx"
+git add manifests/installer.yaml
+git commit -m "chore: 安装清单加入 1.0.1"
+git push origin main
+
+# 3) 发布：打标签，或在 Actions 页面点 Run workflow 并填 1.0.1
+git tag v1.0.1
+git push origin v1.0.1
 ```
+
+> ⚠️ **第 2 步不能省。** CI 只会按标签改写 `extension.yaml` 的 `Version`，**不会**动
+> `manifests/installer.yaml` —— 而官方扩展库正是读它来决定「有没有新版本、去哪里下载」。
+> 漏掉这一步，已安装的用户就永远收不到更新提示。
 
 推送标签后，GitHub Actions 会自动完成：编译 → 按标签改写 `extension.yaml` 的 `Version` → 打包 `.pext` → 创建 Release 并把安装包作为附件上传。
 
 > 只推送到 `main` 或提交 PR 时，仅跑一次编译检查，不会发布。
 >
 > CI 构建机上没有 Playnite，`GameVault.csproj` 会自动回退到 NuGet 上的官方 `PlayniteSDK` 包，因此云端构建无需任何额外配置。
+>
+> 也可以在 Actions 页面手动触发：点 **Run workflow**、填版本号，效果与打标签相同，且不需要动 git 标签。
 
-改动清单后建议自检一遍（校验必填字段、版本号、AddonId、仓库地址是否自洽）：
+### 发布前自检
 
 ```bash
 pip install pyyaml

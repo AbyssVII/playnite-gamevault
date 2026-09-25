@@ -119,23 +119,40 @@ It reads the version from `extension.yaml` and produces `GameVault_<version>.pex
 
 ## Releasing a new version
 
-The **git tag is the single source of truth** for the version number; CI syncs it into `extension.yaml` and publishes automatically:
+Say you want to release `1.0.1` — three things:
 
 ```bash
+# 1) commit your code and push to main
 git add -A
-git commit -m "feat: something new"
+git commit -m "fix: something"
+git push origin main
 
-git tag v1.8.2          # the tag is the release version
-git push origin main --tags
+# 2) record the version in the installer manifest (this is what the
+#    official add-on database reads to detect new versions)
+python scripts/add-release.py 1.0.1 --changelog "fix: something"
+git add manifests/installer.yaml
+git commit -m "chore: add 1.0.1 to the installer manifest"
+git push origin main
+
+# 3) publish: tag it, or run the workflow manually from the Actions tab
+git tag v1.0.1
+git push origin v1.0.1
 ```
+
+> ⚠️ **Step 2 is not optional.** CI only rewrites `Version` in `extension.yaml` from the tag;
+> it does **not** touch `manifests/installer.yaml` — and that is the file the official add-on
+> database reads to decide whether a newer version exists and where to download it. Skip it
+> and existing users will never be offered the update.
 
 Pushing a tag makes GitHub Actions build, rewrite `Version` in `extension.yaml` from the tag, package the `.pext`, and create a Release with the installer attached.
 
 > Pushes to `main` and pull requests only run a build check — nothing is published.
 >
 > CI runners have no Playnite installed, so `GameVault.csproj` falls back to the official `PlayniteSDK` NuGet package automatically. No extra CI configuration is needed.
+>
+> You can also trigger it manually from the Actions tab: click **Run workflow** and enter the version — same result as pushing a tag, without touching git tags.
 
-After changing any manifest, run the self-check (required fields, version numbers, AddonId, repository URL consistency):
+### Pre-release self-check
 
 ```bash
 pip install pyyaml
