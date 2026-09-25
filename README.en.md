@@ -49,7 +49,59 @@ Switch between 中文 / English from the dropdown next to the title in the top-l
 
 **Misc**
 - Double-clicking a card jumps to the Playnite library view with that game selected (it does **not** launch the game)
-- One-click copy of a library summary: total count / total playtime / last 2 weeks / most-played / average Metacritic / Top 10 for the current sort
+
+## Analytics
+
+Click the chart button in the top-right corner (where the old *copy summary* button used to be) to switch the whole view to the **Analytics** page. The back arrow in its top-left returns you to the vault.
+
+<img src="screenshots/analyze-en.png" width="880" alt="Analytics page">
+
+**Genre distribution (donut chart)**
+- Groups your library by genre tags and renders a donut chart
+- Toggle between two bases: **by playtime** (cumulative time per genre) or **by game count**
+- Click any slice or legend row to **jump back to the vault filtered by that genre** — the breakdown is a navigation tool, not just a picture
+- Shows the top 9 genres; the rest are merged into *Other*
+
+> A game can belong to several genres (e.g. Action / Adventure / Indie), so the sum of per-genre counts will **exceed** your total library size. That is expected.
+
+**Top 50 by playtime**
+The 50 most-played games with rank, share bar, and playtime — so you can see where the hours actually went.
+
+**"What kind of player are you?" report**
+Walks the whole library — playtime distribution, concentration, unplayed backlog, genre preference, score preference, recent momentum, and favouriting habits — and produces an **eight-part** player profile, each part carrying one key figure:
+
+| Section | What it reads |
+| --- | --- |
+| Player archetype | Whether you're a generalist, a specialist, or a collector |
+| Play rhythm | Median vs average playtime — grazing or deep diving, plus the share of short games |
+| Concentration | Top 1/3/10 share — wide net or a few deep dives |
+| Backlog | How many bought-but-never-played, and how much time they represent |
+| Genre preference | Your most-invested genre and its share |
+| Score taste | Share of highly-rated games and whether your taste is picky |
+| Momentum | Your firepower over the last two weeks |
+| Favourites | How many games earned your star — i.e. how high your bar for "love" is |
+
+**Similar games you might like**
+At the bottom of the report, a few recommendations are generated **from the taste the report just read** (pulled from your top three genres by playtime). Each card shows a cover, the title, and a reason such as "Action · Metacritic 89".
+The picker **excludes games you've already played**, favours installed and highly rated ones, and shows at most 8.
+
+<img src="screenshots/analyze-zh-recommend.png" width="880" alt="Player profile report and recommendations">
+
+**Two tones, switchable anytime**: the **centred** toggle in the top bar flips between **Snarky** (opinionated, a little cheeky) and **Formal** (facts and inferences only).
+
+> Functional buttons are always **centred** (new ones extend outwards) rather than parked in the top-right — that area belongs to the window's minimise/maximise/close buttons, and anything placed there becomes unclickable.
+
+Snarky vs Formal:
+
+<img src="screenshots/analyze-en-formal.png" width="880" alt="Formal tone">
+
+**Resizable panels**
+Every panel on the Analytics page can be resized: drag the **splitter** between two panels (it turns blue on hover) to change the pie/Top-50 width ratio, or the height ratio between the top row and the report below. Your sizes are **remembered** and restored next time you open the page.
+
+**Fully local — nothing is uploaded**
+The report is generated entirely by a local rules engine from your real data. **No network calls, no uploads, no API keys.**
+
+**Bilingual**: the Analytics page follows the same language setting as the vault.
 
 ## Installation
 
@@ -75,11 +127,13 @@ Copy `extension.yaml`, `GameVault.dll`, and `icon.png` into:
 After restarting, click **Game Vault** in the left sidebar.
 If it isn't there: main menu → **Add-ons** → enable *Show in sidebar* for GameVault.
 
+The top bar on the right has two buttons: **Analytics** (chart icon) opens the analytics page, **Refresh** rescans the library.
+
 ## Where the data comes from
 
 | Data | Source |
 | --- | --- |
-| Total playtime, Metacritic score, developer, publisher, artwork | Playnite game database |
+| Total playtime, Metacritic score, developer, publisher, artwork, **genre tags** | Playnite game database |
 | Last-2-weeks playtime | Session history recorded by the **[GameActivity](https://github.com/JosefNemec/PlayniteExtensions)** plugin |
 
 > ⚠️ Playnite itself **only stores total playtime** and keeps no session history. Last-2-weeks playtime depends entirely on GameActivity — without it the column shows 0 and the status bar tells you why.
@@ -174,12 +228,16 @@ Once merged, users can find and install GameVault — with automatic updates —
 - The view XAML ships as an **embedded resource** and is parsed at runtime with `XamlReader.Parse`, sidestepping the friction of XAML compilation under net48.
 - The bilingual UI uses a **resource dictionary + `DynamicResource`**: the hover panel lives inside a `ToolTip` and is not part of the visual tree, where ordinary bindings cannot reach — dynamic resources can.
 - The grid view uses a `WrapPanel` plus **incremental loading** (150 items per batch). A wrapping panel cannot be virtualized, but this is what makes column reflow track the zoom slider perfectly in real time.
+- The genre donut is a **hand-written control** (`Path` + `ArcSegment`), with no charting dependency: colours, hover pop-out, per-slice entrance animation, and hit-testing are all custom.
+- The player profile is a **local rules engine** (`Profile.cs`). It calls no online service, so there is nothing to configure, nothing to pay for, and no data leaves your machine.
 
 ## Known limitations
 
 - Last-2-weeks playtime requires the GameActivity plugin
 - Playnite **Desktop** mode only (Fullscreen is not adapted)
 - The grid appends the next batch as you reach the bottom, so the scrollbar length is dynamic for very large libraries
+- Genre stats only count **genre tags actually present** in your library; games without tags trigger a "no genre data" hint
+- The player profile is rule-generated, not real LLM output (the trade-off for zero dependencies and full privacy)
 
 ## License
 

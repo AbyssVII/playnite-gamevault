@@ -267,6 +267,26 @@ namespace GameVault
         }
     }
 
+    /// <summary>类型饼图的配色。刻意避开 ScorePalette 里已用于评分的红/黄/橙/绿，
+    /// 免得用户把"类型颜色"误读成"评分高低"。</summary>
+    public static class GenrePalette
+    {
+        public static readonly string[] Colors =
+        {
+            "#4CC2FF",  // 亮蓝
+            "#A78BFA",  // 紫
+            "#F472B6",  // 粉
+            "#2DD4BF",  // 青绿
+            "#FBBF24",  // 琥珀
+            "#60A5FA",  // 中蓝
+            "#FB923C",  // 橙棕
+            "#C084FC",  // 淡紫
+            "#34D399",  // 翠绿
+        };
+
+        public const string Other = "#64748B";
+    }
+
     /// <summary>库存中的一条游戏记录（同一名称的多个平台副本会被合并）</summary>
     public class GameEntry : INotifyPropertyChanged
     {
@@ -288,6 +308,13 @@ namespace GameVault
         public string Name { get; set; }
         public ulong TotalPlaytime { get; set; }
         public ulong RecentPlaytime { get; set; }
+
+        /// <summary>
+        /// 该条目对应（合并前）的所有游戏 Id，字符串形式。
+        /// 用于把 GameActivity 的会话记录归并到合并后的条目上 ——
+        /// 同一款游戏在多平台有多个副本时，时间轴要把它们算作同一款。
+        /// </summary>
+        public List<string> ActivityKeys { get; set; } = new List<string>();
 
         public string CoverPath { get; set; }
         public string PosterPath { get; set; }
@@ -515,6 +542,226 @@ namespace GameVault
     {
         public string Label { get; set; }
         public string Color { get; set; }
+    }
+
+    /// <summary>饼图里的一瓣。</summary>
+    public class GenreSlice
+    {
+        public string Name { get; set; }
+
+        /// <summary>该类型下的游戏款数（合并平台副本后）</summary>
+        public int GameCount { get; set; }
+
+        /// <summary>是否是"其他"兜底切片（配色与文案不同）</summary>
+        public bool IsOther { get; set; }
+
+        /// <summary>该类型的总时长（秒）</summary>
+        public ulong Playtime { get; set; }
+
+        /// <summary>占总时长或总款数的比例（0~1）</summary>
+        public double Share { get; set; }
+
+        public string Color { get; set; }
+
+        /// <summary>预生成的展示文案，避免在 XAML 里做多路绑定</summary>
+        public string CountText { get; set; }
+        public string PlaytimeText { get; set; }
+        public string ShareText { get; set; }
+
+        /// <summary>饼图几何数据（由 PieChart 填充）</summary>
+        public string Geometry { get; set; }
+    }
+
+    /// <summary>
+    /// 生成「你是什么样的玩家」报告所需的全部原始指标。
+    /// 刻意做成一个扁平的事实集合：报告生成器只读它，不碰游戏库，
+    /// 这样换文风 / 换语言时重新生成既快又不会有一致性问题。
+    /// </summary>
+    public class ProfileFacts
+    {
+        // ---- 规模 ----
+        public int TotalGames;
+        public int PlayedGames;
+        public int UnplayedGames;
+        public int InstalledGames;
+        public ulong TotalPlaytime;
+        public ulong RecentPlaytime;
+        public int ActiveInPeriod;
+
+        // ---- 集中度 ----
+        public ulong Top1Time;
+        public string Top1Name;
+        public ulong Top3Time;
+        public ulong Top10Time;
+        public double Top1Share;      // 0~1
+        public double Top10Share;
+        public double RecentShare;
+
+        // ---- 时长分层（款数）----
+        public int TierNone;          // 0
+        public int TierLight;         // < 5h
+        public int TierMedium;        // 5 ~ 30h
+        public int TierHeavy;         // 30 ~ 100h
+        public int TierDeep;          // >= 100h
+        public int CompletedishCount; // >= 100h 视为"深挖"
+
+        // ---- 评分 ----
+        public int ScoredCount;
+        public double AverageScore;
+        public int HighScoreCount;    // >= 85
+        public int LowScoreCount;     // < 70
+
+        // ---- 结构 ----
+        public int BacklogAgeDays;    // 最早入库的未玩游戏距今天数
+        public int OldestUnplayedAgeDays;
+        public double InstallRate;    // 已安装 / 总数
+
+        // ---- 类型 ----
+        public string TopGenreName;
+        public double TopGenreShare;
+        public int GenreCount;
+        public string SecondGenreName;
+
+        // ---- 平台 / 商店 ----
+        public string TopStoreName;
+        public int TopStoreCount;
+
+        // ---- 年份 ----
+        public int OldestReleaseYear;
+        public int NewestReleaseYear;
+        public int ModernCount;       // 近 5 年发行的款数
+
+        // ---- 列表（供报告引用具体游戏名）----
+        public List<string> TopGameNames = new List<string>();
+        public List<GameEntry> TopGames = new List<GameEntry>();
+
+        // ---- 时间 / 习惯（报告扩充用）----
+        /// <summary>已玩游戏中位时长（秒）——比平均值更抗极端值</summary>
+        public ulong MedianPlayedTime;
+        /// <summary>库里"短平快"作品（&lt; 10h）的数量，用于判断是否偏好小品</summary>
+        public int ShortGameCount;
+        /// <summary>平均每款已玩游戏玩了几轮/多久</summary>
+        public ulong AvgPlayedTime;
+        /// <summary>最近一次游玩距今天数（负数/0 表示无记录）</summary>
+        public int DaysSinceLastPlay;
+        /// <summary>入库年份跨度（最早入库 → 现在）</summary>
+        public int LibraryAgeDays;
+        /// <summary>近两年入库的款数，反映"最近还在买吗"</summary>
+        public int RecentlyAdded;
+        /// <summary>最长连续活跃感受：同时活跃（同一天有记录）的峰值不便算，这里用"两周内活跃款数"</summary>
+        public int DistinctPlayedYears;
+        /// <summary>收藏（Favorite）数量</summary>
+        public int FavoriteCount;
+        /// <summary>已安装但从未玩过的款数——最典型的"待办"</summary>
+        public int InstalledUnplayed;
+    }
+
+    /// <summary>分析页「推荐」卡片的一行：一款被推荐的游戏 + 推荐理由。</summary>
+    public class RecommendRow
+    {
+        public GameEntry Entry { get; set; }
+
+        /// <summary>推荐理由，如「同类型 · 92 分 · 已入库未玩」</summary>
+        public string Reason { get; set; }
+
+        /// <summary>
+        /// true = 推荐的游戏**不在用户库里**（AI / 知识库给出的库外作品）；
+        /// false = 来自用户自己的库存。两种卡片样式不同（库外的显示"可入库/尝试"标识）。
+        /// </summary>
+        public bool IsExternal { get; set; }
+
+        /// <summary>库外推荐时的游戏名（因为 Entry 为 null）。</summary>
+        public string ExternalName { get; set; }
+
+        /// <summary>库外推荐时所属的类型标签。</summary>
+        public string ExternalGenre { get; set; }
+    }
+
+    // ==================================================================
+    // 游玩时间轴（周维度）
+    // ==================================================================
+
+    /// <summary>某一周里玩得最多的一款游戏。</summary>
+    public class WeekHighlight
+    {
+        public string Name { get; set; }
+        public ulong Seconds { get; set; }
+        public GameEntry Entry { get; set; }
+    }
+
+    /// <summary>时间轴上的一个点：一周。</summary>
+    public class WeekBucket
+    {
+        /// <summary>该周周一（本地日期，已归零到 00:00）。</summary>
+        public DateTime WeekStart { get; set; }
+
+        /// <summary>ISO 周序号（用于显示"第 N 周"）。</summary>
+        public int WeekOfYear { get; set; }
+
+        /// <summary>该周总游玩秒数。</summary>
+        public ulong TotalSeconds { get; set; }
+
+        /// <summary>该周玩过的游戏数。</summary>
+        public int GameCount { get; set; }
+
+        /// <summary>该周玩得最多的游戏（按秒数），可能为 null（没记录）。</summary>
+        public WeekHighlight Top { get; set; }
+
+        // ---- 展示字段（由 View 层/聚合层填好，XAML 直接绑）----
+        public double BarHeight { get; set; }      // 柱高（像素，按当周时长相对峰值换算）
+        public string TotalText { get; set; }      // "12h 30m"
+        public string TopNameText { get; set; }    // 冠军游戏名
+        public string TopTimeText { get; set; }    // 冠军游玩时长
+        public string WeekLabel { get; set; }      // "8/24"（该周周一）
+        public string MonthLabel { get; set; }     // "9 月"（仅当月第一周有值）
+        public bool IsEmpty { get; set; }          // 当周无记录
+        public bool IsCurrent { get; set; }        // 是否本周
+
+        /// <summary>
+        /// 聚合中间状态：该周每款游戏的累计秒数。
+        /// 只在 BuildTimeline 里用，算完就定型到 Top/GameCount，界面不读它。
+        /// </summary>
+        [System.NonSerialized]
+        public Dictionary<GameEntry, ulong> accum = new Dictionary<GameEntry, ulong>();
+    }
+
+    /// <summary>时间轴上的一个月份分组（用于画月份分隔标签）。</summary>
+    public class MonthGroup
+    {
+        public string Label { get; set; }          // "2026 年 9 月"
+        public int StartIndex { get; set; }        // 在 Weeks 列表中的起始下标
+        public int WeekCount { get; set; }
+        /// <summary>该月总时长。</summary>
+        public ulong TotalSeconds { get; set; }
+        public string TotalText { get; set; }
+    }
+
+    /// <summary>
+    /// 整个时间轴的数据：一串周 + 月份分组。
+    /// 由 <see cref="VaultData.BuildTimeline"/> 生成，View 只负责渲染。
+    /// </summary>
+    public class TimelineData
+    {
+        public List<WeekBucket> Weeks { get; set; } = new List<WeekBucket>();
+        public List<MonthGroup> Months { get; set; } = new List<MonthGroup>();
+
+        /// <summary>时间跨度（周数）。</summary>
+        public int WeekCount { get { return Weeks.Count; } }
+
+        /// <summary>峰值周时长（秒），画柱高时做归一化用。</summary>
+        public ulong PeakSeconds { get; set; }
+
+        /// <summary>有记录的周数。</summary>
+        public int ActiveWeeks { get; set; }
+
+        /// <summary>时间轴范围内总时长。</summary>
+        public ulong TotalSeconds { get; set; }
+
+        /// <summary>数据是否可用（没有 GameActivity 时整块显示空态）。</summary>
+        public bool Available { get; set; }
+
+        public string TotalText { get; set; }
+        public string SpanText { get; set; }
     }
 
     public static class NameKey

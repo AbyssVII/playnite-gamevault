@@ -111,13 +111,63 @@ jobs:
           Write-Host "已生成 $out（$((Get-Item $out).Length) 字节）"
           Get-ChildItem $out | Select-Object Name, Length | Format-Table
 
-      # 标签已存在时 GitHub 会复用它；不存在（手动运行的情况）则按当前提交创建。
-      - name: 创建 GitHub Release
+      # Release 页面显示的更新说明取自 manifests/installer.yaml 里对应版本的 Changelog，
+      # 而不是 GitHub 自动生成的 commit 列表 —— 用户要看的是"改了什么"，
+      # 而不是一堆提交哈希。所以每次发版前记得先用 scripts/add-release.py 登记。
+      - name: 生成 Release 说明
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.ver.outputs.version }}"
+          $lines = Get-Content manifests/installer.yaml
+          $notes = New-Object System.Collections.Generic.List[string]
+          $inTarget = $false
+          $inChangelog = $false
+
+          foreach ($line in $lines) {
+            if ($line -match '^\s*-\s+Version:\s*(\S+)\s*$') {
+              if ($inTarget) { break }              # 走到下一条版本记录，结束
+              if ($Matches[1] -eq $ver) { $inTarget = $true }
+              continue
+            }
+            if (-not $inTarget) { continue }
+            if ($line -match '^\s*Changelog:\s*$') { $inChangelog = $true; continue }
+            if (-not $inChangelog) { continue }
+            if ($line -match '^\s*-\s+(.+?)\s*$') {
+              $notes.Add('- ' + $Matches[1])
+            } elseif ($line.Trim() -eq '') {
+              continue
+            } else {
+              break                                  # Changelog 块结束
+            }
+          }
+
+          if ($notes.Count -eq 0) {
+            Write-Warning "installer.yaml 里没有 $ver 的 Changelog，说明将只含标题"
+            $notes.Add('本次发布未在 manifests/installer.yaml 中登记更新说明。')
+          }
+
+          $all = @("## GameVault $ver", "", "### 更新内容 / What's changed", "") + @($notes)
+          [System.IO.File]::WriteAllLines("$PWD/release-notes.md", $all,
+            [System.Text.UTF8Encoding]::new($false))   # 不带 BOM，避免首行出现多余字符
+          Write-Host "已生成 release-notes.md（$($notes.Count) 条）："
+          Get-Content release-notes.md
+
+      # Release 可能已存在（重复推送同一个标签时），此时改为更新说明和附件，
+      # 否则 gh release create 会因标签已占用而失败。
+      - name: 创建或更新 GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ steps.ver.outputs.tag }}"
           $file = (Get-ChildItem "GameVault_*.pext" | Select-Object -First 1).Name
-          Write-Host "创建 Release：$tag（附件 $file）"
-          gh release create $tag $file --title $tag --generate-notes --target "${{ github.sha }}"
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag 已存在，更新说明与附件"
+            gh release edit $tag --title $tag --notes-file release-notes.md
+            gh release upload $tag $file --clobber
+          } else {
+            Write-Host "创建 Release：$tag（附件 $file）"
+            gh release create $tag $file --title $tag --notes-file release-notes.md --target "${{ github.sha }}"
+          }

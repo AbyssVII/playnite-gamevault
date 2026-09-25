@@ -6,7 +6,7 @@
     <AssemblyName>GameVault</AssemblyName>
     <RootNamespace>GameVault</RootNamespace>
     <!-- 版本号以 extension.yaml 为准，这里保持一致，让 dll 的文件版本也对得上 -->
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

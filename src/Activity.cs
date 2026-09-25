@@ -171,6 +171,34 @@ namespace GameVault
             return sum;
         }
 
+        /// <summary>
+        /// 返回所有游戏的所有游玩会话（游戏 key + 本地时间 + 秒数），供时间轴聚合使用。
+        ///
+        /// 这里把 UTC 转成**本地时间**：GameActivity 存的是 UTC，但用户认知里
+        /// "我上周二晚上玩了 2 小时"是按本地时区算的。按 UTC 分周会把跨零点的
+        /// 会话分到错误的一周。
+        /// </summary>
+        public List<PlaySession> AllSessions()
+        {
+            var result = new List<PlaySession>();
+            lock (sync)
+            {
+                foreach (var pair in perGame)
+                {
+                    foreach (var item in pair.Value)
+                    {
+                        result.Add(new PlaySession
+                        {
+                            GameKey = pair.Key,
+                            When = item.Key.ToLocalTime(),
+                            Seconds = item.Value
+                        });
+                    }
+                }
+            }
+            return result;
+        }
+
         public ulong TotalSeconds(string key)
         {
             List<KeyValuePair<DateTime, ulong>> list;
@@ -179,5 +207,17 @@ namespace GameVault
             foreach (var pair in list) sum += pair.Value;
             return sum;
         }
+    }
+
+    /// <summary>一次游玩会话（时间轴聚合的原子单位）。</summary>
+    public class PlaySession
+    {
+        /// <summary>对应 GameEntry 的某个可匹配键（通常是 Game.Id 的字符串）。</summary>
+        public string GameKey { get; set; }
+
+        /// <summary>本地时间（已从 UTC 转换）。</summary>
+        public DateTime When { get; set; }
+
+        public ulong Seconds { get; set; }
     }
 }

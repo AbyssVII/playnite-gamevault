@@ -23,10 +23,23 @@ namespace GameVault
         [DataMember(Name = "Language")]
         public string Language { get; set; }
 
+        /// <summary>分析页「类型分布」列的宽度（用户拖动分隔条后保存）。0 = 用默认值。</summary>
+        [DataMember(Name = "AnalyzeGenreWidth")]
+        public double AnalyzeGenreWidth { get; set; }
+
+        /// <summary>分析页第一排（饼图 + Top 50）的高度。0 = 用默认值。</summary>
+        [DataMember(Name = "AnalyzeTopHeight")]
+        public double AnalyzeTopHeight { get; set; }
+
+        /// <summary>AI 推荐配置（接口地址 / 密钥 / 模型）。缺省即不启用 AI，只走本地推荐。</summary>
+        [DataMember(Name = "Ai")]
+        public AiConfig Ai { get; set; }
+
         public GameVaultSettings()
         {
             CardWidth = DefaultCardWidth;
             Language = L10n.Zh;
+            Ai = new AiConfig();
         }
 
         public static double Clamp(double value)
@@ -34,6 +47,15 @@ namespace GameVault
             if (double.IsNaN(value) || double.IsInfinity(value)) return DefaultCardWidth;
             if (value < MinCardWidth) return MinCardWidth;
             if (value > MaxCardWidth) return MaxCardWidth;
+            return value;
+        }
+
+        /// <summary>分隔条尺寸的合理区间。太小的值会让面板挤成一条，读不出内容。</summary>
+        public static double ClampPanel(double value, double fallback, double min, double max)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0) return fallback;
+            if (value < min) return min;
+            if (value > max) return max;
             return value;
         }
     }
@@ -98,6 +120,11 @@ namespace GameVault
                         if (loaded != null)
                         {
                             loaded.CardWidth = GameVaultSettings.Clamp(loaded.CardWidth);
+                            loaded.AnalyzeGenreWidth =
+                                GameVaultSettings.ClampPanel(loaded.AnalyzeGenreWidth, 0, 300, 1100);
+                            loaded.AnalyzeTopHeight =
+                                GameVaultSettings.ClampPanel(loaded.AnalyzeTopHeight, 0, 240, 1400);
+                            if (loaded.Ai == null) loaded.Ai = new AiConfig();
                             current = loaded;
                         }
                     }
@@ -115,6 +142,72 @@ namespace GameVault
                 var clamped = GameVaultSettings.Clamp(value);
                 if (Math.Abs(current.CardWidth - clamped) < 0.01) return;
                 current.CardWidth = clamped;
+            }
+            ScheduleSave();
+        }
+
+        // ---- 分析页面板尺寸 ----
+
+        public static double AnalyzeGenreWidth
+        {
+            get { lock (Sync) return current.AnalyzeGenreWidth; }
+        }
+
+        public static double AnalyzeTopHeight
+        {
+            get { lock (Sync) return current.AnalyzeTopHeight; }
+        }
+
+        public static void SetAnalyzeGenreWidth(double value)
+        {
+            lock (Sync)
+            {
+                var clamped = GameVaultSettings.ClampPanel(value, 0, 300, 1100);
+                if (Math.Abs(current.AnalyzeGenreWidth - clamped) < 1) return;
+                current.AnalyzeGenreWidth = clamped;
+            }
+            ScheduleSave();
+        }
+
+        public static void SetAnalyzeTopHeight(double value)
+        {
+            lock (Sync)
+            {
+                var clamped = GameVaultSettings.ClampPanel(value, 0, 240, 1400);
+                if (Math.Abs(current.AnalyzeTopHeight - clamped) < 1) return;
+                current.AnalyzeTopHeight = clamped;
+            }
+            ScheduleSave();
+        }
+
+        // ---- AI 推荐配置 ----
+
+        /// <summary>取当前 AI 配置的副本（调用方只读，不要直接改）。</summary>
+        public static AiConfig Ai
+        {
+            get
+            {
+                lock (Sync)
+                {
+                    if (current.Ai == null) current.Ai = new AiConfig();
+                    return new AiConfig
+                    {
+                        Endpoint = current.Ai.Endpoint,
+                        ApiKey = current.Ai.ApiKey,
+                        Model = current.Ai.Model
+                    };
+                }
+            }
+        }
+
+        public static void SetAi(string endpoint, string apiKey, string model)
+        {
+            lock (Sync)
+            {
+                if (current.Ai == null) current.Ai = new AiConfig();
+                current.Ai.Endpoint = (endpoint ?? "").Trim();
+                current.Ai.ApiKey = (apiKey ?? "").Trim();
+                current.Ai.Model = (model ?? "").Trim();
             }
             ScheduleSave();
         }

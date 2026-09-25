@@ -1,5 +1,26 @@
 AddonId: 7f3a91c4-6e28-4d15-b0aa-4c19d7e53b82
 Packages:
+  - Version: 1.0.2
+    RequiredApiVersion: 6.16.0
+    ReleaseDate: 2026-09-25
+    PackageUrl: https://github.com/AbyssVII/playnite-gamevault/releases/download/v1.0.2/GameVault_1.0.2.pext
+    Changelog:
+      - 新增「数据分析」页：右上角图表按钮整页切换，点返回回到库存页 / New Analytics page: the top-right chart button switches the whole view, the back arrow returns to the vault
+      - 按游戏类型标签绘制的环形饼图，可在「按时长／按款数」两种口径间切换 / Genre donut chart with a by-playtime / by-count basis toggle
+      - 点击饼图任意一瓣或图例即可跳回库存页并按该类型过滤 / Click any slice or legend row to jump back to the vault filtered by that genre
+      - 新增游戏时长 Top 50 榜，含排名、占比条与时长 / New Top 50 by playtime list with rank, share bar and playtime
+      - 新增「你是一个什么样的玩家」玩家画像报告，六段式分析时长分布、集中度、未玩积压、类型偏好、评分偏好与近期活跃度 / New player profile report with six sections covering playtime distribution, concentration, backlog, genre and score preferences, and recent momentum
+      - 报告提供「锐评」与「正式」两种文风，可随时切换 / Report offered in two switchable tones: Snarky and Formal
+      - 报告完全由本地规则引擎生成，不联网、不上传数据、无需 API key / The report is generated entirely by a local rules engine - no network, no uploads, no API key
+      - 玩家画像报告扩充为八段，新增「游玩节奏」与「收藏习惯」，全文更详细 / Player profile report expanded to eight sections, adding play rhythm and favourites habits, with richer prose
+      - 报告底部新增「推荐同类好游戏」，按读出来的口味推荐同类型作品并附推荐理由，自动排除已玩过的游戏 / New "more games like these" recommendations at the end of the report, picked from your detected taste with reasons, excluding games you have already played
+      - 分析页各面板可自由拖拽调整大小（左右宽度比、上下高度比），尺寸自动记忆 / Analytics panels are now freely resizable by dragging the splitters (column width and row height), and sizes are remembered
+      - 分析页功能按钮改为居中排布，不再与窗口的最小化/最大化/关闭按钮重叠 / Analytics toolbar buttons are now centred instead of being placed where they overlapped the window buttons
+      - 新增横向「游玩时间轴」：以月为间隔、每周一根柱，柱高为当周时长，悬停显示当周最爱玩的游戏与时长（数据来自 GameActivity 逐局记录） / New horizontal play timeline: monthly dividers with one bar per week, bar height = weekly playtime, hover shows the top game and time for that week (from GameActivity sessions)
+      - 新增 AI 库外游戏推荐：填入任意 OpenAI 兼容接口（默认豆包／火山方舟）的 API Key，即可让模型按类型分类推荐库外同类好游戏，仅上传口味摘要、不上传游戏库，未配置或失败时自动回退本地推荐 / New AI external recommendations: plug in any OpenAI-compatible API key (Doubao / Volcano Ark by default) to get genre-grouped picks from outside your library; only a taste summary is sent, never the full library, with automatic fallback to local picks
+      - 分享按钮由「复制文字」改为生成一张专门排版的竖版分享长图，自动复制到剪贴板并保存到「图片\GameVault」 / The share button now generates a purpose-laid-out portrait share image (copied to clipboard and saved to Pictures\GameVault) instead of copying plain text
+      - 放大分析页的环形饼图，中心数字随尺寸自适应 / Enlarged the analytics donut chart, with centre figures scaling with the chart
+
   - Version: 1.0.1
     RequiredApiVersion: 6.16.0
     ReleaseDate: 2026-09-25
