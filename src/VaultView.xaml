@@ -173,7 +173,7 @@
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Height" Value="34"/>
-      <Setter Property="Padding" Value="18,0"/>
+      <Setter Property="Padding" Value="14,0"/>
       <Setter Property="FontSize" Value="12.5"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -241,11 +241,15 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" Background="#151C26" BorderBrush="{StaticResource BorderSoft}"
-                    BorderThickness="1" CornerRadius="6">
-              <Path Data="M0,0 L3.5,3.5 L7,0" Stroke="#8593A3" StrokeThickness="1.3"
-                    HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            </Border>
+            <!-- 外层透明 Grid：Border 的 CornerRadius 会让圆角之外不参与命中测试，
+                 套一层才能做到整个矩形都可点（排序按钮当初就是踩的这个坑） -->
+            <Grid Background="Transparent">
+              <Border x:Name="Bd" Background="#151C26" BorderBrush="{StaticResource BorderSoft}"
+                      BorderThickness="1" CornerRadius="6">
+                <Path Data="M0,0 L3.5,3.5 L7,0" Stroke="#8593A3" StrokeThickness="1.3"
+                      HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              </Border>
+            </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="Bd" Property="Background" Value="#1B2430"/>
@@ -263,7 +267,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ComboBoxItem">
-            <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Margin="4,1" Padding="9,5">
+            <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Margin="4,0" Padding="9,5">
               <ContentPresenter/>
             </Border>
             <ControlTemplate.Triggers>
@@ -284,7 +288,7 @@
     <Style x:Key="LangCombo" TargetType="ComboBox">
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Height" Value="26"/>
+      <Setter Property="Height" Value="28"/>
       <Setter Property="Width" Value="98"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="ItemContainerStyle" Value="{StaticResource LangComboItem}"/>
@@ -720,26 +724,38 @@
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
-          <TextBlock Text="&#xE7F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+        <!-- 左侧：图标 / 标题 / 计数 / 语言切换。
+             这里用 Grid 而不是 StackPanel —— 标题那一列是 *，窗口变窄时它会先被压成省略号，
+             整块内容因此永远不会溢出到中间列去遮挡搜索框。
+             （用 StackPanel 时内容宽度固定，会盖住中间列，导致语言下拉框点不中。） -->
+        <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+
+          <TextBlock Grid.Column="0" Text="&#xE7F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                      FontSize="17" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
-          <TextBlock Text="{DynamicResource LocTitle}" FontSize="16.5" FontWeight="SemiBold" Margin="9,0,0,0" VerticalAlignment="Center"/>
-          <Border Background="#1C2634" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+          <TextBlock Grid.Column="1" Text="{DynamicResource LocTitle}" FontSize="16.5" FontWeight="SemiBold"
+                     Margin="9,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          <Border Grid.Column="2" Background="#1C2634" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
             <TextBlock Text="{Binding EntryCountText}" FontSize="13" Foreground="{StaticResource TextDim}"/>
           </Border>
 
           <!-- 语言切换（中文 / English） -->
-          <ComboBox x:Name="LanguageBox" Style="{StaticResource LangCombo}" Margin="12,0,0,0"
+          <ComboBox Grid.Column="3" x:Name="LanguageBox" Style="{StaticResource LangCombo}" Margin="12,0,0,0"
                     ToolTip="{DynamicResource LocTipLanguage}">
             <ComboBoxItem Content="中文"/>
             <ComboBoxItem Content="English"/>
           </ComboBox>
-        </StackPanel>
+        </Grid>
 
         <!-- 搜索 + 排序 + 视图工具：整组居中。
              右侧刻意留空 —— Playnite 自己的最小化/关闭按钮就在窗口右上角，放这儿会重叠。 -->
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-          <TextBox x:Name="SearchInput" Style="{StaticResource SearchBox}" Width="210" Margin="0,0,14,0"/>
+          <TextBox x:Name="SearchInput" Style="{StaticResource SearchBox}" Width="180" Margin="0,0,14,0"/>
           <Border Background="#151C26" CornerRadius="8" Padding="0">
             <StackPanel Orientation="Horizontal">
               <Button x:Name="SortTotal"  Style="{StaticResource SegButton}" Content="{DynamicResource LocSortTotal}" Tag="Active"/>

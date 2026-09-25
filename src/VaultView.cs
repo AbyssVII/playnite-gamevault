@@ -100,6 +100,9 @@ namespace GameVault
         private const int PageSize = 150;
         private const double ZoomStep = 4;
 
+        /// <summary>分享摘要里最多列出多少款游戏。</summary>
+        private const int ShareTopCount = 50;
+
         /// <summary>点中滚动条后用方向键微调的步长（像素），刻意取小值以便精细定位</summary>
         private const double ScrollStep = 40;
 
@@ -628,10 +631,10 @@ namespace GameVault
             var recentMode = sortMode == SortMode.Recent;
             var scoreMode = sortMode == SortMode.Score;
             sb.AppendLine(L10n.T(recentMode
-                ? "LocShareTop10Recent"
-                : (scoreMode ? "LocShareTop10Score" : "LocShareTop10Total")));
+                ? "LocShareTopListRecent"
+                : (scoreMode ? "LocShareTopListScore" : "LocShareTopListTotal")));
 
-            var top = visible.Take(10).ToList();
+            var top = visible.Take(ShareTopCount).ToList();
             for (var i = 0; i < top.Count; i++)
             {
                 var g = top[i];
