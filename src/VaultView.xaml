@@ -17,8 +17,12 @@
     <SolidColorBrush x:Key="BgCardHover" Color="#1E2734"/>
     <SolidColorBrush x:Key="BorderSoft"  Color="#222B39"/>
     <SolidColorBrush x:Key="TextMain"    Color="#E6EDF3"/>
-    <SolidColorBrush x:Key="TextDim"     Color="#8593A3"/>
-    <SolidColorBrush x:Key="TextFaint"   Color="#5A6673"/>
+    <!-- 次要文字（开发商名、时长数值等）。卡片背景 #161D27 上约 12.6:1 -->
+    <SolidColorBrush x:Key="TextDim"     Color="#D6DFE9"/>
+    <!-- 小标签（"库存总数""总游戏时长""开发商"等）。
+         对比度演进：#5A6673（2.89:1，几乎看不清）→ #9AA8B8（6.99:1）→ 现在 #C1CDDB。
+         现在：根背景 12.0:1 / 面板 11.2:1 / 卡片 10.5:1；同时全站字号 +1px。 -->
+    <SolidColorBrush x:Key="TextFaint"   Color="#C1CDDB"/>
     <SolidColorBrush x:Key="Accent"      Color="#4CC2FF"/>
 
     <!-- ============ 滚动条 ============ -->
@@ -324,11 +328,11 @@
             <Border Background="{TemplateBinding Background}" CornerRadius="15" BorderThickness="1" BorderBrush="{StaticResource BorderSoft}">
               <Grid>
                 <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="12" Foreground="{StaticResource TextFaint}"
+                           FontSize="13" Foreground="{StaticResource TextFaint}"
                            VerticalAlignment="Center" Margin="11,0,0,0"/>
                 <ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="Center"/>
                 <TextBlock x:Name="Hint" Text="{DynamicResource LocSearchHint}" Foreground="{StaticResource TextFaint}"
-                           FontSize="12.5" VerticalAlignment="Center" Margin="31,0,0,0" IsHitTestVisible="False"/>
+                           FontSize="13.5" VerticalAlignment="Center" Margin="31,0,0,0" IsHitTestVisible="False"/>
               </Grid>
             </Border>
             <ControlTemplate.Triggers>
@@ -404,7 +408,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,0,0,9">
               <Border CornerRadius="5" Padding="7,3" Margin="0,0,6,0"
                       Background="{Binding ScoreBrush}" Opacity="0.92">
-                <TextBlock FontSize="12" FontWeight="Bold" Foreground="#0B0E14">
+                <TextBlock FontSize="13" FontWeight="Bold" Foreground="#0B0E14">
                   <Run Text="Metacritic "/><Run Text="{Binding ScoreText, Mode=OneWay}"/>
                 </TextBlock>
               </Border>
@@ -418,7 +422,7 @@
                   <DataTemplate>
                     <Border CornerRadius="5" Padding="7,3" Margin="0,0,6,0"
                             BorderThickness="1" BorderBrush="{Binding Color}">
-                      <TextBlock Text="{Binding Label}" FontSize="11.5" Foreground="{Binding Color}"/>
+                      <TextBlock Text="{Binding Label}" FontSize="12.5" Foreground="{Binding Color}"/>
                     </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -436,10 +440,10 @@
                 <RowDefinition/>
                 <RowDefinition/>
               </Grid.RowDefinitions>
-              <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource LocDeveloper}" FontSize="11.5" Foreground="{StaticResource TextFaint}" Margin="0,0,14,0"/>
-              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Developers}" FontSize="12" Foreground="{StaticResource TextMain}" TextTrimming="CharacterEllipsis"/>
-              <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource LocPublisher}" FontSize="11.5" Foreground="{StaticResource TextFaint}" Margin="0,3,14,0"/>
-              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Publishers}" FontSize="12" Foreground="{StaticResource TextMain}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource LocDeveloper}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,0,14,0"/>
+              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Developers}" FontSize="13" Foreground="{StaticResource TextMain}" TextTrimming="CharacterEllipsis"/>
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource LocPublisher}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,3,14,0"/>
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Publishers}" FontSize="13" Foreground="{StaticResource TextMain}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
             </Grid>
 
             <!-- 时长数据 -->
@@ -454,25 +458,25 @@
                   <RowDefinition/>
                 </Grid.RowDefinitions>
                 <StackPanel Grid.Row="0" Grid.Column="0">
-                  <TextBlock Text="{DynamicResource LocTotalTime}" FontSize="10.5" Foreground="{StaticResource TextFaint}"/>
-                  <TextBlock Text="{Binding TotalLongText}" FontSize="13" FontWeight="SemiBold" Margin="0,1,0,0"/>
+                  <TextBlock Text="{DynamicResource LocTotalTime}" FontSize="12.5" Foreground="{StaticResource TextFaint}"/>
+                  <TextBlock Text="{Binding TotalLongText}" FontSize="14" FontWeight="SemiBold" Margin="0,1,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Row="0" Grid.Column="1">
-                  <TextBlock Text="{DynamicResource LocRecentTime}" FontSize="10.5" Foreground="{StaticResource TextFaint}"/>
-                  <TextBlock Text="{Binding RecentLongText}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,1,0,0"/>
+                  <TextBlock Text="{DynamicResource LocRecentTime}" FontSize="12.5" Foreground="{StaticResource TextFaint}"/>
+                  <TextBlock Text="{Binding RecentLongText}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,1,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
-                  <TextBlock Text="{DynamicResource LocLastPlayed}" FontSize="10.5" Foreground="{StaticResource TextFaint}"/>
-                  <TextBlock Text="{Binding LastPlayedText}" FontSize="12" Foreground="{StaticResource TextDim}" Margin="0,1,0,0"/>
+                  <TextBlock Text="{DynamicResource LocLastPlayed}" FontSize="12.5" Foreground="{StaticResource TextFaint}"/>
+                  <TextBlock Text="{Binding LastPlayedText}" FontSize="13" Foreground="{StaticResource TextDim}" Margin="0,1,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
-                  <TextBlock Text="{DynamicResource LocReleased}" FontSize="10.5" Foreground="{StaticResource TextFaint}"/>
-                  <TextBlock Text="{Binding ReleaseText}" FontSize="12" Foreground="{StaticResource TextDim}" Margin="0,1,0,0"/>
+                  <TextBlock Text="{DynamicResource LocReleased}" FontSize="12.5" Foreground="{StaticResource TextFaint}"/>
+                  <TextBlock Text="{Binding ReleaseText}" FontSize="13" Foreground="{StaticResource TextDim}" Margin="0,1,0,0"/>
                 </StackPanel>
               </Grid>
             </Border>
 
-            <TextBlock Text="{Binding Description}" FontSize="11.5" Foreground="{StaticResource TextDim}"
+            <TextBlock Text="{Binding Description}" FontSize="12.5" Foreground="{StaticResource TextDim}"
                        TextWrapping="Wrap" MaxHeight="52" TextTrimming="CharacterEllipsis"/>
           </StackPanel>
         </StackPanel>
@@ -509,7 +513,7 @@
           <Border Grid.Row="0" CornerRadius="9,9,0,0" ClipToBounds="True" Background="#0E141C"
                   Height="{Binding DataContext.CoverHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
             <Grid>
-              <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#3A4654"
+              <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource TextFaint}"
                          TextAlignment="Center" TextWrapping="Wrap" Margin="10"
                          VerticalAlignment="Center" HorizontalAlignment="Center"/>
               <Image Source="{Binding Cover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="LowQuality"/>
@@ -524,7 +528,7 @@
                   <DataTemplate>
                     <Border CornerRadius="4" Padding="5,2" Margin="0,0,0,4"
                             Background="#CC0B0E14" BorderThickness="1" BorderBrush="{Binding Color}">
-                      <TextBlock Text="{Binding Label}" FontSize="10" Foreground="{Binding Color}" FontWeight="SemiBold"/>
+                      <TextBlock Text="{Binding Label}" FontSize="11" Foreground="{Binding Color}" FontWeight="SemiBold"/>
                     </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -532,7 +536,7 @@
 
               <Border CornerRadius="14" Width="30" Height="30" VerticalAlignment="Top" HorizontalAlignment="Right"
                       Margin="0,6,6,0" Background="#D90B0E14" BorderThickness="1.5" BorderBrush="{Binding ScoreBrush}">
-                <TextBlock Text="{Binding ScoreText}" FontSize="12.5" FontWeight="Bold"
+                <TextBlock Text="{Binding ScoreText}" FontSize="13.5" FontWeight="Bold"
                            Foreground="{Binding ScoreBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
               </Border>
 
@@ -540,7 +544,7 @@
           </Border>
 
           <!-- 名称 -->
-          <TextBlock Grid.Row="1" Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold"
+          <TextBlock Grid.Row="1" Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold"
                      Foreground="{StaticResource TextMain}" Margin="8,7,8,0"
                      TextTrimming="CharacterEllipsis" MaxHeight="30" TextWrapping="Wrap"/>
 
@@ -550,9 +554,9 @@
               <ColumnDefinition/>
               <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding TotalText}" FontSize="11.5"
+            <TextBlock Grid.Column="0" Text="{Binding TotalText}" FontSize="12.5"
                        Foreground="{StaticResource TextDim}" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center">
+            <TextBlock Grid.Column="1" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center">
               <TextBlock.Style>
                 <Style TargetType="TextBlock">
                   <Setter Property="Foreground" Value="{StaticResource TextFaint}"/>
@@ -611,14 +615,14 @@
 
           <Border Grid.Column="0" Width="44" Height="58" CornerRadius="5" ClipToBounds="True" Background="#0E141C">
             <Grid>
-              <TextBlock Text="{Binding Name}" FontSize="8" Foreground="#3A4654" TextWrapping="Wrap"
+              <TextBlock Text="{Binding Name}" FontSize="9" Foreground="{StaticResource TextFaint}" TextWrapping="Wrap"
                          Margin="3" VerticalAlignment="Center" TextAlignment="Center"/>
               <Image Source="{Binding Cover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="LowQuality"/>
             </Grid>
           </Border>
 
           <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
+            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
                        Foreground="{StaticResource TextMain}" TextTrimming="CharacterEllipsis"/>
             <ItemsControl ItemsSource="{Binding Badges}" Margin="0,5,0,0">
               <ItemsControl.ItemsPanel>
@@ -630,7 +634,7 @@
                 <DataTemplate>
                   <Border CornerRadius="4" Padding="5,1" Margin="0,0,5,0"
                           Background="#150B0E14" BorderThickness="1" BorderBrush="{Binding Color}">
-                    <TextBlock Text="{Binding Label}" FontSize="10" Foreground="{Binding Color}"/>
+                    <TextBlock Text="{Binding Label}" FontSize="11" Foreground="{Binding Color}"/>
                   </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
@@ -638,7 +642,7 @@
           </StackPanel>
 
           <!-- 中间空白区：直接展示开发商 / 发行商 -->
-          <TextBlock Grid.Column="2" Text="{Binding DevPubText}" FontSize="11.5"
+          <TextBlock Grid.Column="2" Text="{Binding DevPubText}" FontSize="12.5"
                      Foreground="{StaticResource TextDim}" VerticalAlignment="Center"
                      Margin="22,0,26,0" TextTrimming="CharacterEllipsis"/>
 
@@ -648,8 +652,8 @@
                 <ColumnDefinition/>
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
-              <TextBlock Grid.Column="0" Text="{DynamicResource LocRecentTime}" FontSize="10.5" Foreground="{StaticResource TextFaint}"/>
-              <TextBlock Grid.Column="1" FontSize="11.5" FontWeight="SemiBold">
+              <TextBlock Grid.Column="0" Text="{DynamicResource LocRecentTime}" FontSize="12.5" Foreground="{StaticResource TextFaint}"/>
+              <TextBlock Grid.Column="1" FontSize="12.5" FontWeight="SemiBold">
                 <TextBlock.Style>
                   <Style TargetType="TextBlock">
                     <Setter Property="Foreground" Value="{StaticResource TextFaint}"/>
@@ -671,11 +675,11 @@
           <Border Grid.Column="4" CornerRadius="17" Width="34" Height="34" VerticalAlignment="Center"
                   Margin="0,0,16,0" Background="#D90B0E14" BorderThickness="1.5"
                   BorderBrush="{Binding ScoreBrush}">
-            <TextBlock Text="{Binding ScoreText}" FontSize="13" FontWeight="Bold"
+            <TextBlock Text="{Binding ScoreText}" FontSize="14" FontWeight="Bold"
                        Foreground="{Binding ScoreBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
 
-          <TextBlock Grid.Column="5" Text="{Binding TotalText}" FontSize="16" FontWeight="SemiBold"
+          <TextBlock Grid.Column="5" Text="{Binding TotalText}" FontSize="17" FontWeight="SemiBold"
                      Foreground="{StaticResource TextMain}" VerticalAlignment="Center"
                      MinWidth="82" TextAlignment="Right"/>
         </Grid>
@@ -719,9 +723,9 @@
         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
           <TextBlock Text="&#xE7F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                      FontSize="17" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
-          <TextBlock Text="{DynamicResource LocTitle}" FontSize="15.5" FontWeight="SemiBold" Margin="9,0,0,0" VerticalAlignment="Center"/>
+          <TextBlock Text="{DynamicResource LocTitle}" FontSize="16.5" FontWeight="SemiBold" Margin="9,0,0,0" VerticalAlignment="Center"/>
           <Border Background="#1C2634" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-            <TextBlock Text="{Binding EntryCountText}" FontSize="11" Foreground="{StaticResource TextDim}"/>
+            <TextBlock Text="{Binding EntryCountText}" FontSize="13" Foreground="{StaticResource TextDim}"/>
           </Border>
 
           <!-- 语言切换（中文 / English） -->
@@ -765,41 +769,41 @@
 
         <Border Grid.Column="0" Style="{StaticResource StatCard}" Margin="0,0,10,0">
           <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatGames}" FontSize="11" Foreground="{StaticResource TextFaint}"/>
+            <TextBlock Text="{DynamicResource LocStatGames}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
             <TextBlock Text="{Binding EntryCountText}" FontSize="21" FontWeight="SemiBold" Margin="0,2,0,0"/>
-            <TextBlock Text="{Binding RawCountText}" FontSize="10.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
+            <TextBlock Text="{Binding RawCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
           </StackPanel>
         </Border>
 
         <Border Grid.Column="1" Style="{StaticResource StatCard}" Margin="0,0,10,0">
           <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatPlaytime}" FontSize="11" Foreground="{StaticResource TextFaint}"/>
+            <TextBlock Text="{DynamicResource LocStatPlaytime}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
             <TextBlock Text="{Binding TotalPlaytimeText}" FontSize="21" FontWeight="SemiBold" Margin="0,2,0,0"/>
-            <TextBlock Text="{Binding PlayedCountText}" FontSize="10.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
+            <TextBlock Text="{Binding PlayedCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
           </StackPanel>
         </Border>
 
         <Border Grid.Column="2" Style="{StaticResource StatCard}" Margin="0,0,10,0">
           <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatRecent}" FontSize="11" Foreground="{StaticResource TextFaint}"/>
+            <TextBlock Text="{DynamicResource LocStatRecent}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
             <TextBlock Text="{Binding RecentPlaytimeText}" FontSize="21" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,2,0,0"/>
-            <TextBlock Text="{Binding ActiveCountText}" FontSize="10.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
+            <TextBlock Text="{Binding ActiveCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
           </StackPanel>
         </Border>
 
         <Border Grid.Column="3" Style="{StaticResource StatCard}" Margin="0,0,10,0">
           <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatTop}" FontSize="11" Foreground="{StaticResource TextFaint}"/>
-            <TextBlock Text="{Binding TopGameName}" FontSize="13.5" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding TopGameTimeText}" FontSize="10.5" Foreground="{StaticResource TextFaint}" Margin="0,3,0,0"/>
+            <TextBlock Text="{DynamicResource LocStatTop}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
+            <TextBlock Text="{Binding TopGameName}" FontSize="14.5" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding TopGameTimeText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,3,0,0"/>
           </StackPanel>
         </Border>
 
         <Border Grid.Column="4" Style="{StaticResource StatCard}">
           <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatScore}" FontSize="11" Foreground="{StaticResource TextFaint}"/>
+            <TextBlock Text="{DynamicResource LocStatScore}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
             <TextBlock Text="{Binding AverageScoreText}" FontSize="21" FontWeight="SemiBold" Margin="0,2,0,0"/>
-            <TextBlock Text="{Binding ScoredCountText}" FontSize="10.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
+            <TextBlock Text="{Binding ScoredCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
           </StackPanel>
         </Border>
       </Grid>
@@ -818,12 +822,12 @@
                ItemsPanel="{StaticResource WrapItemsPanel}"
                ItemTemplate="{StaticResource GameCardTemplate}"/>
 
-      <TextBlock x:Name="EmptyHint" Text="{DynamicResource LocEmpty}" FontSize="14" Foreground="{StaticResource TextFaint}"
+      <TextBlock x:Name="EmptyHint" Text="{DynamicResource LocEmpty}" FontSize="15" Foreground="{StaticResource TextFaint}"
                  HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
 
       <Border x:Name="LoadingMask" Background="#F20B0E14" Visibility="Collapsed">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-          <TextBlock Text="{DynamicResource LocLoading}" FontSize="14" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center"/>
+          <TextBlock Text="{DynamicResource LocLoading}" FontSize="15" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center"/>
           <ProgressBar IsIndeterminate="True" Width="220" Height="3" Margin="0,12,0,0" Foreground="{StaticResource Accent}"
                        Background="#1C2530" BorderThickness="0"/>
         </StackPanel>
@@ -851,7 +855,7 @@
           </Style>
         </Border.Style>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <TextBlock Text="&#x2212;" FontFamily="Segoe UI" FontSize="15" FontWeight="SemiBold"
+          <TextBlock Text="&#x2212;" FontFamily="Segoe UI" FontSize="16" FontWeight="SemiBold"
                      Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"
                      Margin="0,0,8,0" IsHitTestVisible="False"/>
           <Slider x:Name="ZoomSlider"
@@ -862,7 +866,7 @@
                   Value="172"
                   SmallChange="4"
                   LargeChange="18"/>
-          <TextBlock Text="+" FontFamily="Segoe UI" FontSize="15" FontWeight="SemiBold"
+          <TextBlock Text="+" FontFamily="Segoe UI" FontSize="16" FontWeight="SemiBold"
                      Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"
                      Margin="8,0,0,0" IsHitTestVisible="False"/>
         </StackPanel>
@@ -872,8 +876,8 @@
     <!-- ============ 状态栏 ============ -->
     <Border Grid.Row="3" Background="{StaticResource BgPanel}" BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderSoft}" Padding="16,0">
       <Grid Height="26">
-        <TextBlock x:Name="StatusText" Text="{Binding StatusText}" FontSize="11" Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"/>
-        <TextBlock x:Name="SourceText" Text="{Binding SourceText}" FontSize="11" Foreground="{StaticResource TextFaint}"
+        <TextBlock x:Name="StatusText" Text="{Binding StatusText}" FontSize="13" Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"/>
+        <TextBlock x:Name="SourceText" Text="{Binding SourceText}" FontSize="13" Foreground="{StaticResource TextFaint}"
                    VerticalAlignment="Center" HorizontalAlignment="Right"/>
       </Grid>
     </Border>
