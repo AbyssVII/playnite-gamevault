@@ -1,5 +1,16 @@
 AddonId: 7f3a91c4-6e28-4d15-b0aa-4c19d7e53b82
 Packages:
+  - Version: 1.0.1
+    RequiredApiVersion: 6.16.0
+    ReleaseDate: 2026-09-25
+    PackageUrl: https://github.com/AbyssVII/playnite-gamevault/releases/download/v1.0.1/GameVault_1.0.1.pext
+    Changelog:
+      - 修复顶部工具条（排序按钮、语言下拉框、右下角缩放条）只有鼠标落在偏下位置才能点中的问题 / Fixed top toolbar controls (sort buttons, language dropdown, zoom slider) only responding to clicks in their lower part
+      - 修复窗口较窄时顶部栏元素互相遮挡、导致语言下拉框大部分区域点不中的问题 / Fixed top bar elements overlapping on narrow windows, which made most of the language dropdown unclickable
+      - 提高所有次要文字（库存总数、总游戏时长、开发商等标签）的对比度，并整体放大字号 / Improved contrast of all secondary labels and increased overall font size
+      - 分享摘要由总时长 Top 10 扩展为 Top 50 / Extended the share summary from Top 10 to Top 50
+      - 修复封面缺失时兜底文字几乎不可见的问题 / Fixed the placeholder game title being nearly invisible when a cover image is missing
+
   - Version: 1.0.0
     RequiredApiVersion: 6.16.0
     ReleaseDate: 2026-09-24
