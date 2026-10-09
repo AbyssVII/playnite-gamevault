@@ -3,72 +3,140 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:GameVault;assembly=GameVault"
     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-    Background="#0B0E14"
-    Foreground="#E6EDF3"
+    Background="#120C24"
+    Foreground="#EDE9FA"
     FontFamily="Segoe UI"
     UseLayoutRounding="True"
     SnapsToDevicePixels="True">
 
   <UserControl.Resources>
 
+    <!-- 多值 OR 转换器：供概览卡悬停小窗把「卡片悬停」与「小窗悬停」合并成 IsOpen -->
+    <local:AnyTrueConverter x:Key="AnyTrue"/>
+
     <!-- ============ 基础色板 ============ -->
-    <SolidColorBrush x:Key="BgRoot"      Color="#0B0E14"/>
-    <SolidColorBrush x:Key="BgPanel"     Color="#11161F"/>
-    <SolidColorBrush x:Key="BgCard"      Color="#161D27"/>
-    <SolidColorBrush x:Key="BgCardHover" Color="#1E2734"/>
-    <SolidColorBrush x:Key="BorderSoft"  Color="#222B39"/>
-    <SolidColorBrush x:Key="TextMain"    Color="#E6EDF3"/>
-    <!-- 次要文字（开发商名、时长数值等）。卡片背景 #161D27 上约 12.6:1 -->
-    <SolidColorBrush x:Key="TextDim"     Color="#D6DFE9"/>
+    <!-- 蓝紫主题：底色是深紫，面板/卡片逐层提亮并往蓝紫偏，
+         描边用蓝紫系让层次分隔更明显。Accent / InstalledRing 走蓝→紫渐变，
+         全站的强调色（选中、焦点、链接、徽标）因此统一成蓝紫。 -->
+    <SolidColorBrush x:Key="BgRoot"      Color="#120C24"/>
+    <SolidColorBrush x:Key="BgPanel"     Color="#171233"/>
+    <SolidColorBrush x:Key="BgCard"      Color="#1E1940"/>
+    <SolidColorBrush x:Key="BgCardHover" Color="#2A2154"/>
+    <SolidColorBrush x:Key="BorderSoft"  Color="#2E2660"/>
+    <SolidColorBrush x:Key="TextMain"    Color="#EDE9FA"/>
+    <!-- 次要文字（开发商名、时长数值等）。卡片背景 #1E1940 上约 12.6:1 -->
+    <SolidColorBrush x:Key="TextDim"     Color="#DAD3F2"/>
     <!-- 小标签（"库存总数""总游戏时长""开发商"等）。
-         对比度演进：#5A6673（2.89:1，几乎看不清）→ #9AA8B8（6.99:1）→ 现在 #C1CDDB。
+         对比度演进：#6E6699（2.89:1，几乎看不清）→ #9AA8B8（6.99:1）→ 现在 #C6BEE6。
          现在：根背景 12.0:1 / 面板 11.2:1 / 卡片 10.5:1；同时全站字号 +1px。 -->
-    <SolidColorBrush x:Key="TextFaint"   Color="#C1CDDB"/>
-    <SolidColorBrush x:Key="Accent"      Color="#4CC2FF"/>
+    <SolidColorBrush x:Key="TextFaint"   Color="#C6BEE6"/>
+    <!-- 蓝→紫横向渐变。LinearGradientBrush 可以直接当 Foreground / Background /
+         BorderBrush 用，替换原来的 SolidColorBrush 不会破坏任何绑定
+         （代码里没有对 Accent 做 SolidColorBrush 强转）。 -->
+    <LinearGradientBrush x:Key="Accent" StartPoint="0,0" EndPoint="1,0">
+      <GradientStop Color="#5B8CFF" Offset="0"/>
+      <GradientStop Color="#A855F7" Offset="1"/>
+    </LinearGradientBrush>
+    <!-- 已安装游戏的四周描边（蓝紫偏紫）。比 Accent（青蓝）更"冷紫"，
+         用来和"悬停变亮"区分开：描边是"这款在你机器上"的常驻标记，悬停只是临时高亮。 -->
+    <LinearGradientBrush x:Key="InstalledRing" StartPoint="0,0" EndPoint="1,1">
+      <GradientStop Color="#7C6BFF" Offset="0"/>
+      <GradientStop Color="#C084FC" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="InstalledRingHover" StartPoint="0,0" EndPoint="1,1">
+      <GradientStop Color="#9C85FF" Offset="0"/>
+      <GradientStop Color="#D8B4FE" Offset="1"/>
+    </LinearGradientBrush>
 
     <!-- ============ 滚动条 ============ -->
+    <!-- 竖版 / 横版共用的细条模板。模板内的 x:Name 在 XamlReader 下会注册进同一个
+         NameScope，两个模板各写一个 PART_Track 会直接解析失败，所以只能共用一份。
+         细条方向（Width=竖 / Height=横）和 Track 方向由 Orientation 触发器切换。 -->
+    <ControlTemplate x:Key="SlimScrollTemplate" TargetType="ScrollBar">
+      <Grid Background="Transparent">
+        <Track x:Name="PART_Track" IsDirectionReversed="True">
+          <Track.Thumb>
+            <Thumb>
+              <Thumb.Template>
+                <!-- 热区占满整条，视觉上只是中间一根细条，好抓取 -->
+                <ControlTemplate TargetType="Thumb">
+                  <Grid Background="Transparent">
+                    <Border x:Name="Bar" Background="#39465A" CornerRadius="4"
+                            Width="8" HorizontalAlignment="Center" Margin="0,3"/>
+                  </Grid>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter TargetName="Bar" Property="Background" Value="#4CC2FF"/>
+                      <Setter TargetName="Bar" Property="Width" Value="10"/>
+                    </Trigger>
+                    <Trigger Property="IsDragging" Value="True">
+                      <Setter TargetName="Bar" Property="Background" Value="#4CC2FF"/>
+                      <Setter TargetName="Bar" Property="Width" Value="10"/>
+                    </Trigger>
+                    <!-- 横向滚动条：细条转成横向摆放，悬停/拖拽同样加粗 -->
+                    <DataTrigger Binding="{Binding Orientation,
+                                           RelativeSource={RelativeSource AncestorType=ScrollBar}}"
+                                 Value="Horizontal">
+                      <Setter TargetName="Bar" Property="Width" Value="Auto"/>
+                      <Setter TargetName="Bar" Property="Height" Value="6"/>
+                      <Setter TargetName="Bar" Property="Margin" Value="3,0"/>
+                      <Setter TargetName="Bar" Property="HorizontalAlignment" Value="Stretch"/>
+                      <Setter TargetName="Bar" Property="VerticalAlignment" Value="Center"/>
+                    </DataTrigger>
+                    <MultiDataTrigger>
+                      <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Orientation,
+                                             RelativeSource={RelativeSource AncestorType=ScrollBar}}"
+                                   Value="Horizontal"/>
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}"
+                                   Value="True"/>
+                      </MultiDataTrigger.Conditions>
+                      <Setter TargetName="Bar" Property="Background" Value="#4CC2FF"/>
+                      <Setter TargetName="Bar" Property="Height" Value="8"/>
+                    </MultiDataTrigger>
+                    <MultiDataTrigger>
+                      <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Orientation,
+                                             RelativeSource={RelativeSource AncestorType=ScrollBar}}"
+                                   Value="Horizontal"/>
+                        <Condition Binding="{Binding IsDragging, RelativeSource={RelativeSource Self}}"
+                                   Value="True"/>
+                      </MultiDataTrigger.Conditions>
+                      <Setter TargetName="Bar" Property="Background" Value="#4CC2FF"/>
+                      <Setter TargetName="Bar" Property="Height" Value="8"/>
+                    </MultiDataTrigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Thumb.Template>
+            </Thumb>
+          </Track.Thumb>
+        </Track>
+      </Grid>
+      <ControlTemplate.Triggers>
+        <!-- 竖条的 IsDirectionReversed=True 是"向上=增大"；横条必须关掉，否则方向拖反 -->
+        <Trigger Property="Orientation" Value="Horizontal">
+          <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+        </Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate>
+
     <Style x:Key="SlimScrollBar" TargetType="ScrollBar">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Width" Value="14"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ScrollBar">
-            <Grid Background="Transparent">
-              <Track x:Name="PART_Track" IsDirectionReversed="True">
-                <Track.Thumb>
-                  <Thumb>
-                    <Thumb.Template>
-                      <!-- 热区占满整条（14px），视觉上只是中间一根细条，好抓取 -->
-                      <ControlTemplate TargetType="Thumb">
-                        <Grid Background="Transparent">
-                          <Border x:Name="Bar" Background="#39465A" CornerRadius="4"
-                                  Width="8" HorizontalAlignment="Center" Margin="0,3"/>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                          <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bar" Property="Background" Value="#4CC2FF"/>
-                            <Setter TargetName="Bar" Property="Width" Value="10"/>
-                          </Trigger>
-                          <Trigger Property="IsDragging" Value="True">
-                            <Setter TargetName="Bar" Property="Background" Value="#4CC2FF"/>
-                            <Setter TargetName="Bar" Property="Width" Value="10"/>
-                          </Trigger>
-                        </ControlTemplate.Triggers>
-                      </ControlTemplate>
-                    </Thumb.Template>
-                  </Thumb>
-                </Track.Thumb>
-              </Track>
-            </Grid>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
+      <Setter Property="Template" Value="{StaticResource SlimScrollTemplate}"/>
       <Style.Triggers>
         <Trigger Property="Orientation" Value="Horizontal">
           <Setter Property="Height" Value="14"/>
           <Setter Property="Width" Value="Auto"/>
         </Trigger>
       </Style.Triggers>
+    </Style>
+
+    <!-- 横向版：给周报底下那条水平滚动条用，比竖条矮一点 -->
+    <Style x:Key="SlimHScrollBar" TargetType="ScrollBar">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Height" Value="12"/>
+      <Setter Property="Template" Value="{StaticResource SlimScrollTemplate}"/>
     </Style>
 
     <Style TargetType="ScrollViewer">
@@ -132,7 +200,7 @@
                       <ControlTemplate TargetType="Thumb">
                         <Grid>
                           <Ellipse Fill="#4CC2FF" Width="13" Height="13"/>
-                          <Ellipse Fill="#0B0E14" Width="5" Height="5"/>
+                          <Ellipse Fill="#120C24" Width="5" Height="5"/>
                         </Grid>
                       </ControlTemplate>
                     </Thumb.Template>
@@ -190,7 +258,7 @@
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#1B2430"/>
+                <Setter TargetName="Bd" Property="Background" Value="#221B48"/>
                 <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -199,7 +267,7 @@
       </Setter>
       <Style.Triggers>
         <Trigger Property="Tag" Value="Active">
-          <Setter Property="Foreground" Value="#0B0E14"/>
+          <Setter Property="Foreground" Value="#120C24"/>
           <Setter Property="Background" Value="{StaticResource Accent}"/>
           <Setter Property="FontWeight" Value="SemiBold"/>
         </Trigger>
@@ -225,7 +293,7 @@
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#1B2430"/>
+                <Setter TargetName="Bd" Property="Background" Value="#221B48"/>
                 <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
                 <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
               </Trigger>
@@ -245,7 +313,7 @@
             <!-- 外层透明 Grid：Border 的 CornerRadius 会让圆角之外不参与命中测试，
                  套一层才能做到整个矩形都可点（排序按钮当初就是踩的这个坑） -->
             <Grid Background="Transparent">
-              <Border x:Name="Bd" Background="#151C26" BorderBrush="{StaticResource BorderSoft}"
+              <Border x:Name="Bd" Background="#1A1538" BorderBrush="{StaticResource BorderSoft}"
                       BorderThickness="1" CornerRadius="6">
                 <Path Data="M0,0 L3.5,3.5 L7,0" Stroke="#8593A3" StrokeThickness="1.3"
                       HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -253,7 +321,7 @@
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#1B2430"/>
+                <Setter TargetName="Bd" Property="Background" Value="#221B48"/>
                 <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -273,11 +341,11 @@
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="#1E2735"/>
+                <Setter TargetName="Bd" Property="Background" Value="#2A2154"/>
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
-                <Setter Property="Foreground" Value="#0B0E14"/>
+                <Setter Property="Foreground" Value="#120C24"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -306,7 +374,7 @@
               <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
                      IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
                      PopupAnimation="Slide" VerticalOffset="3">
-                <Border Background="#151C26" BorderBrush="#2C3849" BorderThickness="1"
+                <Border Background="#1A1538" BorderBrush="#332A66" BorderThickness="1"
                         CornerRadius="7" Padding="0,4" MinWidth="98">
                   <ItemsPresenter/>
                 </Border>
@@ -317,11 +385,373 @@
       </Setter>
     </Style>
 
-    <!-- ============ 搜索框 ============ -->
-    <Style x:Key="SearchBox" TargetType="TextBox">
+    <!-- ============ 普通字段下拉（年份选择等）============ -->
+    <Style x:Key="FieldComboItem" TargetType="ComboBoxItem">
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBoxItem">
+            <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Margin="4,0" Padding="9,5">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#2A2154"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
+                <Setter Property="Foreground" Value="#120C24"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="FieldCombo" TargetType="ComboBox">
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Height" Value="28"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="ItemContainerStyle" Value="{StaticResource FieldComboItem}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBox">
+            <Grid>
+              <Border Background="#1A1538" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
+                      CornerRadius="7"/>
+              <ToggleButton Background="Transparent" BorderThickness="0" Focusable="False"
+                            ClickMode="Press"
+                            IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                <ToggleButton.Template>
+                  <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="Transparent"/>
+                  </ControlTemplate>
+                </ToggleButton.Template>
+              </ToggleButton>
+              <ContentPresenter IsHitTestVisible="False"
+                                Content="{TemplateBinding SelectionBoxItem}"
+                                ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                Margin="10,0,26,0" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+              <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         FontSize="10" Foreground="{StaticResource TextFaint}"
+                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,9,0"
+                         IsHitTestVisible="False"/>
+              <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                     IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                     PopupAnimation="Slide" VerticalOffset="3">
+                <Border Background="#1A1538" BorderBrush="#332A66" BorderThickness="1"
+                        CornerRadius="7" Padding="0,4"
+                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                  <ItemsPresenter/>
+                </Border>
+              </Popup>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- ============ 主按钮（趣味页的「添加游戏」）============ -->
+    <Style x:Key="PrimaryButton" TargetType="Button">
+      <Setter Property="Foreground" Value="#08121C"/>
+      <Setter Property="Background" Value="{StaticResource Accent}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Height" Value="38"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid Background="Transparent">
+              <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="9"
+                      Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#7AD2FF"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#33A9E8"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Background" Value="#2C2459"/>
+                <Setter Property="Foreground" Value="#7D74A8"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- 同款外观的 ToggleButton（「添加游戏」要能显示展开态，所以用 Toggle 而不是 Button）。
+         不能复用 PrimaryButton —— WPF 的 Style.TargetType 与元素类型必须严格匹配，
+         用 TargetType="Button" 的样式套在 ToggleButton 上会直接抛 XAML 异常。 -->
+    <Style x:Key="PrimaryToggle" TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="#08121C"/>
+      <Setter Property="Background" Value="{StaticResource Accent}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Height" Value="38"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Grid Background="Transparent">
+              <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="9"
+                      Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#7AD2FF"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#33A9E8"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Background" Value="#2C2459"/>
+                <Setter Property="Foreground" Value="#7D74A8"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- ============ 评价编辑器 · 工具栏 ============ -->
+    <!-- 段落样式（正文 / 一级标题 / 二级标题）、加粗、首行缩进都是"可开可关"的状态，
+         所以统一用 ToggleButton：IsChecked 天然就是当前状态，省掉一份手工同步。
+         三个段落样式按钮在 C# 里互斥（同一时刻只允许一个按下）。
+         「插图」是即时动作而不是状态，用 ToolButton。 -->
+    <Style x:Key="ToolToggle" TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="{StaticResource TextDim}"/>
+      <Setter Property="Background" Value="#1A1538"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Height" Value="28"/>
+      <Setter Property="Padding" Value="11,0"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Grid Background="Transparent">
+              <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6"
+                      BorderThickness="1" BorderBrush="Transparent"
+                      Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#2A2154"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#2A1F55"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="ToolButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{StaticResource TextDim}"/>
+      <Setter Property="Background" Value="#1A1538"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Height" Value="28"/>
+      <Setter Property="Padding" Value="11,0"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid Background="Transparent">
+              <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6"
+                      BorderThickness="1" BorderBrush="Transparent"
+                      Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#2A2154"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Background" Value="#12171F"/>
+                <Setter Property="Foreground" Value="#6E6699"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- 评分用的星星：纯图标按钮。填充 / 空心由 C# 按当前分值刷 Foreground。 -->
+    <Style x:Key="ReviewStar" TargetType="Button">
+      <Setter Property="Width" Value="23"/>
+      <Setter Property="Height" Value="26"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid Background="Transparent">
+              <Border x:Name="Bd" Background="Transparent" CornerRadius="5" Padding="2,0">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#2A2154"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- ============ 复选框（趣味页的抽签范围）============ -->
+    <Style x:Key="VaultCheck" TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{StaticResource TextDim}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <!-- 外层透明 Grid：勾选框的圆角会让四角不参与命中测试，
+                 套一层才做到「点文字也能勾上」 -->
+            <Grid Background="Transparent">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border x:Name="Box" Width="16" Height="16" CornerRadius="4"
+                        Background="#1A1538" BorderThickness="1.4"
+                        BorderBrush="{StaticResource BorderSoft}" VerticalAlignment="Center">
+                  <TextBlock x:Name="Tick" Text="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="10" Foreground="#08121C" HorizontalAlignment="Center"
+                             VerticalAlignment="Center" Visibility="Collapsed"/>
+                </Border>
+                <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Box" Property="Background" Value="{StaticResource Accent}"/>
+                <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                <Setter TargetName="Tick" Property="Visibility" Value="Visible"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- ============ 视图切换下拉（库存统计 / 数据分析 / 趣味功能） ============ -->
+    <!-- 与 FieldCombo 长得一样，但默认要更宽一点、字号略大（放在标题旁边当导航用），
+         所以单独开一个 key，免得改这里影响时间轴的年份选择器。 -->
+    <Style x:Key="PageComboItem" TargetType="ComboBoxItem">
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBoxItem">
+            <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Margin="4,0" Padding="9,6">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#2A2154"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
+                <Setter Property="Foreground" Value="#120C24"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="PageCombo" TargetType="ComboBox">
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Height" Value="30"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="ItemContainerStyle" Value="{StaticResource PageComboItem}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBox">
+            <Grid>
+              <Border Background="#1A1538" BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
+                      CornerRadius="8"/>
+              <!-- 整块可点的关键：ToggleButton 铺满、无边框。
+                   外层 Grid 不需要额外透明层，因为这个 Border 本身是直角绘制的矩形背景
+                   （圆角 8 只影响绘制，命中测试仍按矩形走）——但为了万无一失还是让
+                   ToggleButton 自己就是那个矩形。 -->
+              <ToggleButton Background="Transparent" BorderThickness="0" Focusable="False"
+                            ClickMode="Press"
+                            IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                <ToggleButton.Template>
+                  <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="Transparent"/>
+                  </ControlTemplate>
+                </ToggleButton.Template>
+              </ToggleButton>
+              <ContentPresenter IsHitTestVisible="False"
+                                Content="{TemplateBinding SelectionBoxItem}"
+                                ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                Margin="11,0,26,0" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+              <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         FontSize="10" Foreground="{StaticResource TextFaint}"
+                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,9,0"
+                         IsHitTestVisible="False"/>
+              <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                     IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                     PopupAnimation="Slide" VerticalOffset="3">
+                <Border Background="#1A1538" BorderBrush="#332A66" BorderThickness="1"
+                        CornerRadius="7" Padding="0,4"
+                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                  <ItemsPresenter/>
+                </Border>
+              </Popup>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- ============ 搜索框 ============ -->
+    <Style x:Key="SearchBox" TargetType="TextBox">      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="CaretBrush" Value="{StaticResource Accent}"/>
-      <Setter Property="Background" Value="#151C26"/>
+      <Setter Property="Background" Value="#1A1538"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Height" Value="30"/>
       <Setter Property="FontSize" Value="12.5"/>
@@ -335,7 +765,10 @@
                 <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                            FontSize="13" Foreground="{StaticResource TextFaint}"
                            VerticalAlignment="Center" Margin="11,0,0,0"/>
-                <ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="Center"/>
+                <!-- PART_ContentHost 必须把 Padding 透出来：写死 Margin="0" 会让
+                     样式里设的 Padding 彻底失效，输入文字就会压到左侧的放大镜图标上。 -->
+                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                              VerticalAlignment="Center"/>
                 <TextBlock x:Name="Hint" Text="{DynamicResource LocSearchHint}" Foreground="{StaticResource TextFaint}"
                            FontSize="13.5" VerticalAlignment="Center" Margin="31,0,0,0" IsHitTestVisible="False"/>
               </Grid>
@@ -357,10 +790,34 @@
     </Style>
 
     <!-- ============ 表单输入框（AI 配置用） ============ -->
+    <!-- 下拉面板里的搜索输入框。自己写模板、不用主题的 TextBox 模板，两个原因都是被坑出来的：
+         (1) VerticalContentAlignment="Center" 在主题模板里不一定生效，文字会贴到顶上去；
+         (2) 主题模板自带的内边距 / 最小高度会把控件撑高，把 32px 的行挤变形。
+         这里只留一个居中的 PART_ContentHost，文字的上下位置完全由这一行决定；
+         左右留白交给外层 Grid 的列，不给主题模板插手 Padding 的机会。
+         背景和边框由外层 Border 提供，这里保持透明即可。 -->
+    <Style x:Key="PickerSearchBox" TargetType="TextBox">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="CaretBrush" Value="{StaticResource Accent}"/>
+      <Setter Property="SelectionBrush" Value="#3E3570"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <ScrollViewer x:Name="PART_ContentHost"
+                          VerticalAlignment="Center"
+                          HorizontalScrollBarVisibility="Hidden"
+                          VerticalScrollBarVisibility="Hidden"/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="FieldBox" TargetType="TextBox">
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="CaretBrush" Value="{StaticResource Accent}"/>
-      <Setter Property="Background" Value="#0E141C"/>
+      <Setter Property="Background" Value="#130E28"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="FontSize" Value="12.5"/>
       <Setter Property="Height" Value="30"/>
@@ -387,11 +844,40 @@
     </Style>
 
     <!-- ============ 概览卡片 ============ -->
-    <Style x:Key="StatCard" TargetType="Border">      <Setter Property="Background" Value="{StaticResource BgPanel}"/>
+    <!-- 平时是一行 42px 的小卡，只有标题；鼠标移上去在旁边浮出一个**独立小窗**显示明细。
+         用 Popup 而不是「卡片内溢出层」的原因：Popup 渲染在自己的窗口层，
+         完全不在布局树里 —— 从原理上就不可能改变界面布局（连重排都不会触发），
+         也不会被下面游戏列表的 ClipToBounds 裁掉。 -->
+    <Style x:Key="StatCard" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource BgPanel}"/>
       <Setter Property="CornerRadius" Value="10"/>
       <Setter Property="Padding" Value="14,10"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
+    </Style>
+
+    <!-- 折叠态标题行：整行垂直居中，只有一行文字 -->
+    <!-- 13 -> 19.5（约 1.5 倍）并加粗：概览条只有一行标题，字号太小在宽屏上很压得住 -->
+    <Style x:Key="StatCardTitle" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="19.5"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="{StaticResource TextFaint}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+
+    <!-- 小窗内容面板：与卡片同色同圆角，加阴影把它和底下的界面分开 -->
+    <Style x:Key="StatCardFlyout" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource BgPanel}"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="14,11"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}"/>
+      <Setter Property="Effect">
+        <Setter.Value>
+          <DropShadowEffect BlurRadius="18" ShadowDepth="4" Direction="270" Opacity="0.6" Color="#000000"/>
+        </Setter.Value>
+      </Setter>
     </Style>
 
     <!-- ============ 列表容器 ============ -->
@@ -414,8 +900,8 @@
 
     <!-- ============ 悬停详情内容（网格 / 条形共用） ============ -->
     <DataTemplate x:Key="DetailCardTemplate">
-      <Border Width="400" Background="#101720" CornerRadius="12"
-              BorderThickness="1" BorderBrush="#2C3849" Padding="0">
+      <Border Width="400" Background="#161130" CornerRadius="12"
+              BorderThickness="1" BorderBrush="#332A66" Padding="0">
         <StackPanel>
           <!-- 海报：完整显示整张图（不裁切），高度随图片比例自适应。这里有两个坑：
                1) 图片用 ImageBrush 画在圆角 Border 的**背景**上，而不是用 Image 控件 ——
@@ -455,7 +941,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,0,0,9">
               <Border CornerRadius="5" Padding="7,3" Margin="0,0,6,0"
                       Background="{Binding ScoreBrush}" Opacity="0.92">
-                <TextBlock FontSize="13" FontWeight="Bold" Foreground="#0B0E14">
+                <TextBlock FontSize="13" FontWeight="Bold" Foreground="#120C24">
                   <Run Text="Metacritic "/><Run Text="{Binding ScoreText, Mode=OneWay}"/>
                 </TextBlock>
               </Border>
@@ -494,7 +980,7 @@
             </Grid>
 
             <!-- 时长数据 -->
-            <Border Background="#161E29" CornerRadius="8" Padding="11,9" Margin="0,0,0,9">
+            <Border Background="#1F1942" CornerRadius="8" Padding="11,9" Margin="0,0,0,9">
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition/>
@@ -549,24 +1035,31 @@
           </ToolTip>
         </Border.ToolTip>
 
-        <Grid>
+        <Grid x:Name="CardBody">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="36"/>
             <RowDefinition Height="22"/>
           </Grid.RowDefinitions>
 
-          <!-- 封面 -->
-          <Border Grid.Row="0" CornerRadius="9,9,0,0" ClipToBounds="True" Background="#0E141C"
+          <!-- 封面。悬停时整体轻微放大（见 DataTemplate.Triggers 里的 ScaleTransform），
+               RenderTransformOrigin=0.5,0.5 让缩放围绕封面中心，边缘不会跑偏。
+               ClipToBounds 保证放大后的图像不会溢出到卡片圆角之外。 -->
+          <Border Grid.Row="0" CornerRadius="9,9,0,0" ClipToBounds="True" Background="#130E28"
                   Height="{Binding DataContext.CoverHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
-            <Grid>
+            <Grid x:Name="CoverLayer" RenderTransformOrigin="0.5,0.5">
               <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource TextFaint}"
                          TextAlignment="Center" TextWrapping="Wrap" Margin="10"
                          VerticalAlignment="Center" HorizontalAlignment="Center"/>
               <!-- 封面用 ImageBrush 画在圆角 Border 的背景上，四角才会跟卡片一起圆
                    （用 Image 控件时图片是直角，会溢出到圆角之外）。
                    它排在兜底文字之后，所以仍然盖住文字；后面的平台徽章和评分圈又盖在它上面。 -->
-              <Border CornerRadius="9,9,0,0">
+              <!-- 缩放只加在这张"海报"本身上（不放 CoverLayer）：平台徽章和评分圈是叠加在
+                   海报上的 UI，跟着一起放大会显得糊、且分数圈尺寸跳变很扎眼。 -->
+              <Border CornerRadius="9,9,0,0" RenderTransformOrigin="0.5,0.5">
+                <Border.RenderTransform>
+                  <ScaleTransform x:Name="CoverScale" ScaleX="1" ScaleY="1"/>
+                </Border.RenderTransform>
                 <Border.Background>
                   <ImageBrush ImageSource="{Binding Cover}" Stretch="UniformToFill"
                               RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -634,10 +1127,72 @@
         </Grid>
       </Border>
       <DataTemplate.Triggers>
+        <!-- ① 未安装的悬停：描边变 Accent（青蓝）。
+             放在最前 —— WPF 里后面的触发器优先级更高，已安装那条要能盖过它。 -->
         <Trigger SourceName="CardRoot" Property="IsMouseOver" Value="True">
           <Setter TargetName="CardRoot" Property="Background" Value="{StaticResource BgCardHover}"/>
           <Setter TargetName="CardRoot" Property="BorderBrush" Value="{StaticResource Accent}"/>
         </Trigger>
+
+        <!-- 悬停时海报轻微放大（1.06）。用 EnterActions/ExitActions 而不是 Setter：
+             缩放是"动画"而不是"状态"，直接 Setter 会瞬间跳变，很生硬。
+             加大到 1.06 是因为卡片本身就在动（描边变蓝），幅度太大反而晃眼。 -->
+        <Trigger SourceName="CardRoot" Property="IsMouseOver" Value="True">
+          <Trigger.EnterActions>
+            <BeginStoryboard>
+              <Storyboard>
+                <DoubleAnimation Storyboard.TargetName="CoverScale" Storyboard.TargetProperty="ScaleX"
+                                 To="1.06" Duration="0:0:0.16">
+                  <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="CoverScale" Storyboard.TargetProperty="ScaleY"
+                                 To="1.06" Duration="0:0:0.16">
+                  <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+              </Storyboard>
+            </BeginStoryboard>
+          </Trigger.EnterActions>
+          <Trigger.ExitActions>
+            <BeginStoryboard>
+              <Storyboard>
+                <DoubleAnimation Storyboard.TargetName="CoverScale" Storyboard.TargetProperty="ScaleX"
+                                 To="1" Duration="0:0:0.16">
+                  <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="CoverScale" Storyboard.TargetProperty="ScaleY"
+                                 To="1" Duration="0:0:0.16">
+                  <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+              </Storyboard>
+            </BeginStoryboard>
+          </Trigger.ExitActions>
+        </Trigger>
+
+        <!-- ② 已安装：四周描边高亮（蓝紫偏紫）+ 加粗一点，作为"这款在你机器上"的常驻标记。
+             必须排在悬停触发器之后，否则会被上面的 Accent 覆盖掉。 -->
+        <DataTrigger Binding="{Binding IsInstalled}" Value="True">
+          <Setter TargetName="CardRoot" Property="BorderBrush" Value="{StaticResource InstalledRing}"/>
+          <Setter TargetName="CardRoot" Property="BorderThickness" Value="1.6"/>
+        </DataTrigger>
+
+        <!-- ③ 已安装 + 悬停：描边提亮到更浅的紫，避免悬停时反而变回青蓝、和常驻标记打架。
+             用 MultiDataTrigger 精确命中"两种条件同时成立"，优先级最高（放最后）。
+             条件里的 IsMouseOver 必须用 ElementName 指向 CardRoot —— 在 DataTemplate.Triggers
+             里写 RelativeSource Self 会绑到"数据项"（GameEntry）上，那个对象没有 IsMouseOver。 -->
+        <MultiDataTrigger>
+          <MultiDataTrigger.Conditions>
+            <Condition Binding="{Binding IsInstalled}" Value="True"/>
+            <Condition Binding="{Binding IsMouseOver, ElementName=CardRoot}" Value="True"/>
+          </MultiDataTrigger.Conditions>
+          <Setter TargetName="CardRoot" Property="BorderBrush" Value="{StaticResource InstalledRingHover}"/>
+          <Setter TargetName="CardRoot" Property="BorderThickness" Value="2"/>
+        </MultiDataTrigger>
+
+        <!-- 方案 D：未安装的卡片整体压暗（0.62），已安装的保持原样。
+             只压暗 CardBody（不含 ToolTip），悬停弹出的详情卡仍然是正常亮度。 -->
+        <DataTrigger Binding="{Binding IsInstalled}" Value="False">
+          <Setter TargetName="CardBody" Property="Opacity" Value="0.62"/>
+        </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
 
@@ -660,7 +1215,7 @@
           </ToolTip>
         </Border.ToolTip>
 
-        <Grid>
+        <Grid x:Name="BarBody">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
@@ -670,12 +1225,16 @@
             <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
 
-          <Border Grid.Column="0" Width="44" Height="58" CornerRadius="5" ClipToBounds="True" Background="#0E141C">
+          <Border Grid.Column="0" Width="44" Height="58" CornerRadius="5" ClipToBounds="True" Background="#130E28">
             <Grid>
               <TextBlock Text="{Binding Name}" FontSize="9" Foreground="{StaticResource TextFaint}" TextWrapping="Wrap"
                          Margin="3" VerticalAlignment="Center" TextAlignment="Center"/>
-              <!-- 同上：条形视图的小封面也走圆角 Border 的背景，四角才跟外框一致 -->
-              <Border CornerRadius="5">
+              <!-- 同上：条形视图的小封面也走圆角 Border 的背景，四角才跟外框一致。
+                   悬停缩放同样只加在这张缩略图上。 -->
+              <Border CornerRadius="5" RenderTransformOrigin="0.5,0.5">
+                <Border.RenderTransform>
+                  <ScaleTransform x:Name="ThumbScale" ScaleX="1" ScaleY="1"/>
+                </Border.RenderTransform>
                 <Border.Background>
                   <ImageBrush ImageSource="{Binding Cover}" Stretch="UniformToFill"
                               RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -748,10 +1307,65 @@
         </Grid>
       </Border>
       <DataTemplate.Triggers>
+        <!-- ① 未安装的悬停：描边变 Accent（青蓝）。放最前，让"已安装"那条能盖过它。 -->
         <Trigger SourceName="BarRoot" Property="IsMouseOver" Value="True">
           <Setter TargetName="BarRoot" Property="Background" Value="{StaticResource BgCardHover}"/>
           <Setter TargetName="BarRoot" Property="BorderBrush" Value="{StaticResource Accent}"/>
         </Trigger>
+
+        <!-- 悬停时小封面放大（与网格卡同一套手感） -->
+        <Trigger SourceName="BarRoot" Property="IsMouseOver" Value="True">
+          <Trigger.EnterActions>
+            <BeginStoryboard>
+              <Storyboard>
+                <DoubleAnimation Storyboard.TargetName="ThumbScale" Storyboard.TargetProperty="ScaleX"
+                                 To="1.12" Duration="0:0:0.16">
+                  <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="ThumbScale" Storyboard.TargetProperty="ScaleY"
+                                 To="1.12" Duration="0:0:0.16">
+                  <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+              </Storyboard>
+            </BeginStoryboard>
+          </Trigger.EnterActions>
+          <Trigger.ExitActions>
+            <BeginStoryboard>
+              <Storyboard>
+                <DoubleAnimation Storyboard.TargetName="ThumbScale" Storyboard.TargetProperty="ScaleX"
+                                 To="1" Duration="0:0:0.16">
+                  <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+                <DoubleAnimation Storyboard.TargetName="ThumbScale" Storyboard.TargetProperty="ScaleY"
+                                 To="1" Duration="0:0:0.16">
+                  <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+              </Storyboard>
+            </BeginStoryboard>
+          </Trigger.ExitActions>
+        </Trigger>
+
+        <!-- ② 已安装：四周描边高亮（蓝紫偏紫），与网格卡同一套标记 -->
+        <DataTrigger Binding="{Binding IsInstalled}" Value="True">
+          <Setter TargetName="BarRoot" Property="BorderBrush" Value="{StaticResource InstalledRing}"/>
+          <Setter TargetName="BarRoot" Property="BorderThickness" Value="1.6"/>
+        </DataTrigger>
+
+        <!-- ③ 已安装 + 悬停：提亮到更浅的紫（放最后 = 优先级最高）。
+             IsMouseOver 必须用 ElementName 指向 BarRoot（Self 会绑到数据项上，那里没有该属性）。 -->
+        <MultiDataTrigger>
+          <MultiDataTrigger.Conditions>
+            <Condition Binding="{Binding IsInstalled}" Value="True"/>
+            <Condition Binding="{Binding IsMouseOver, ElementName=BarRoot}" Value="True"/>
+          </MultiDataTrigger.Conditions>
+          <Setter TargetName="BarRoot" Property="BorderBrush" Value="{StaticResource InstalledRingHover}"/>
+          <Setter TargetName="BarRoot" Property="BorderThickness" Value="2"/>
+        </MultiDataTrigger>
+
+        <!-- 方案 D：未安装整行压暗 -->
+        <DataTrigger Binding="{Binding IsInstalled}" Value="False">
+          <Setter TargetName="BarBody" Property="Opacity" Value="0.62"/>
+        </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
 
@@ -766,19 +1380,21 @@
 
   </UserControl.Resources>
 
-  <Grid Background="{StaticResource BgRoot}">
-    <!-- 库存页与分析页叠在同一格里，靠 Visibility 切换。
-         用 Visibility 而不是两个独立 UserControl：切回来时 ListBox 的滚动位置、
-         已解码的封面图全都还在，不会重排一次。 -->
-    <Grid x:Name="VaultPage">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="*"/>
-        <RowDefinition Height="Auto"/>
-      </Grid.RowDefinitions>
+  <!-- 外层结构：第 0 行是三个功能页**共用**的顶栏（含左上角的视图切换下拉框），
+       第 1 行是随页面切换的正文区。
+       ⚠️ 顶栏不能放进任何一个页面里 —— 它是切页面的入口，跟着页面一起隐藏就点不到了。
+       正文区里的三个 Grid 全部 Grid.Row="1" 同层叠放，靠 Visibility 切换
+       （用 Visibility 而不是每次重建：切回来时 ListBox 的滚动位置、已解码的封面图
+       全都还在，不会重排一次，也不会重新解码几百张图）。 -->
+  <!-- 根容器。x:Name 是给 Toast 的 Popup 当 PlacementTarget 用的 ——
+       悬浮提示要贴着这个容器的底边出现，必须能按名字引用到它。 -->
+  <Grid x:Name="VaultRoot" Background="{StaticResource BgRoot}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
 
-    <!-- ============ 顶部栏 ============ -->
+    <!-- ============ 顶部栏（三页共用）============ -->
     <!-- 顶部工具栏。
          注意下面几处 shell:WindowChrome.IsHitTestVisibleInChrome="True"：
          Playnite 窗口启用了 WindowChrome，FusionX 主题的 CaptionHeight 是 24px，
@@ -795,28 +1411,46 @@
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- 左侧：图标 / 标题 / 计数 / 语言切换。
-             这里用 Grid 而不是 StackPanel —— 标题那一列是 *，窗口变窄时它会先被压成省略号，
-             整块内容因此永远不会溢出到中间列去遮挡搜索框。
+        <!-- 左侧：图标 / 标题 / [视图切换下拉] / 计数 / 语言切换 / 末尾留白。
+             用 Grid 而不是 StackPanel —— 左侧整组固定宽度、左对齐，
+             多出来的空间由最后那列 * 吸收，内容永远不会溢出到中间列去遮挡搜索框。
              （用 StackPanel 时内容宽度固定，会盖住中间列，导致语言下拉框点不中。） -->
-        <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+        <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0"
+              shell:WindowChrome.IsHitTestVisibleInChrome="True">
+          <!-- 标题列是 Auto（紧贴文字），末尾留白列才是 * ——
+               这样"标题 + 下拉框 + 计数 + 语言"整组左对齐、位置固定，
+               多余宽度全部丢给最后那列，不会把下拉框往右推、也不会随窗口宽度漂移。
+               （若把 * 放在标题列上，标题会被拉长/压成省略号，并把下拉框推走；
+               那正是之前"切换选项卡时下拉框位置会变"的原因。） -->
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
 
           <TextBlock Grid.Column="0" Text="&#xE7F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                      FontSize="17" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
           <TextBlock Grid.Column="1" Text="{DynamicResource LocTitle}" FontSize="16.5" FontWeight="SemiBold"
-                     Margin="9,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-          <Border Grid.Column="2" Background="#1C2634" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                     Margin="9,0,0,0" VerticalAlignment="Center"/>
+
+          <!-- 视图切换下拉框：库存统计 / 数据分析 / 趣味功能。
+               紧贴在「游戏库存」标题右边（用户要求的位置），宽度固定 118、
+               列也是 Auto —— 无论当前选中的是哪一项，位置和尺寸都不会变。
+               （ComboBox 默认会按最长选项撑宽自己，所以这里显式 Width=118 钉死。） -->
+          <ComboBox Grid.Column="2" x:Name="PageSelect" Style="{StaticResource PageCombo}"
+                    Margin="12,0,0,0" Width="118"
+                    HorizontalAlignment="Left"
+                    ToolTip="{DynamicResource LocTipPageSelect}"/>
+
+          <Border Grid.Column="3" Background="#241D4E" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
             <TextBlock Text="{Binding EntryCountText}" FontSize="13" Foreground="{StaticResource TextDim}"/>
           </Border>
 
           <!-- 语言切换（中文 / English） -->
-          <ComboBox Grid.Column="3" x:Name="LanguageBox" Style="{StaticResource LangCombo}" Margin="12,0,0,0"
+          <ComboBox Grid.Column="4" x:Name="LanguageBox" Style="{StaticResource LangCombo}" Margin="12,0,0,0"
                     shell:WindowChrome.IsHitTestVisibleInChrome="True"
                     ToolTip="{DynamicResource LocTipLanguage}">
             <ComboBoxItem Content="中文"/>
@@ -827,84 +1461,358 @@
         <!-- 搜索 + 排序 + 视图工具：整组居中。
              整组声明 IsHitTestVisibleInChrome —— 子元素会沿视觉树向上继承该判定，
              因此搜索框、三个排序按钮、两个图标按钮全部覆盖，无需逐个添加。
-             右侧刻意留空 —— Playnite 自己的最小化/关闭按钮就在窗口右上角，放这儿会重叠。 -->
+             右侧刻意留空 —— Playnite 自己的最小化/关闭按钮就在窗口右上角，放这儿会重叠。
+
+             分析页专用的两个按钮（评价 / 复制分享）也放在这一组里，靠 Visibility
+             跟着页面切换 —— 共用一条顶栏，就不必再给分析页单独做一条（原来那条还带
+             一个返回按钮，现在返回 = 把下拉框切回「库存统计」）。 -->
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"
                     shell:WindowChrome.IsHitTestVisibleInChrome="True">
           <TextBox x:Name="SearchInput" Style="{StaticResource SearchBox}" Width="180" Margin="0,0,14,0"/>
-          <Border Background="#151C26" CornerRadius="8" Padding="0">
+          <Border x:Name="SortGroup" Background="#1A1538" CornerRadius="8" Padding="0">
             <StackPanel Orientation="Horizontal">
               <Button x:Name="SortTotal"  Style="{StaticResource SegButton}" Content="{DynamicResource LocSortTotal}" Tag="Active"/>
               <Button x:Name="SortRecent" Style="{StaticResource SegButton}" Content="{DynamicResource LocSortRecent}"/>
               <Button x:Name="SortScore"  Style="{StaticResource SegButton}" Content="{DynamicResource LocSortScore}"/>
             </StackPanel>
           </Border>
-          <Border Width="1" Height="20" Background="{StaticResource BorderSoft}" Margin="12,0"/>
+          <Border x:Name="SearchDivider" Width="1" Height="20" Background="{StaticResource BorderSoft}" Margin="12,0"/>
           <Button x:Name="ViewToggleButton" Style="{StaticResource IconButton}" Content="&#xE8FD;"
                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" ToolTip="{DynamicResource LocTipList}" Margin="0,0,8,0"/>
           <Button x:Name="ShareButton" Style="{StaticResource IconButton}" Content="&#xE72D;"
                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                  ToolTip="{DynamicResource LocTipShareImage}" Margin="0,0,8,0"/>
-          <Button x:Name="AnalyzeButton" Style="{StaticResource IconButton}" Content="&#xE9D9;"
-                  FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" ToolTip="{DynamicResource LocTipAnalyze}"/>
+                  ToolTip="{DynamicResource LocTipShareImage}"/>
+
+          <!-- 分析页专用（默认收起） -->
+          <Border x:Name="ToneGroup" Background="#1A1538" CornerRadius="8" Padding="0"
+                  Margin="8,0,0,0" Visibility="Collapsed">
+            <Button x:Name="ToneSnarky" Style="{StaticResource SegButton}"
+                    Content="{DynamicResource LocStyleSnarky}" Tag="Active"
+                    ToolTip="{DynamicResource LocTipReportStyle}"/>
+          </Border>
+          <Button x:Name="AnalyzeCopyButton" Style="{StaticResource IconButton}"
+                  Content="&#xE72D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                  Visibility="Collapsed" ToolTip="{DynamicResource LocTipCopyShare}"/>
         </StackPanel>
       </Grid>
     </Border>
 
-    <!-- ============ 概览卡片 ============ -->
-    <Border Grid.Row="1" Padding="16,12,16,12">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition/>
-          <ColumnDefinition/>
-          <ColumnDefinition/>
-          <ColumnDefinition/>
-          <ColumnDefinition/>
-        </Grid.ColumnDefinitions>
+    <!-- ============ 库存统计（默认页）============ -->
+    <!-- VaultBody 才是随页面切换的部分：概览卡 + 游戏列表 + 状态栏。
+         里面的右键缩放条等都在这一层，隐藏时一并消失。 -->
+    <Grid x:Name="VaultPage" Grid.Row="1">
+      <Grid x:Name="VaultBody">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <Border Grid.Column="0" Style="{StaticResource StatCard}" Margin="0,0,10,0">
-          <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatGames}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
-            <TextBlock Text="{Binding EntryCountText}" FontSize="21" FontWeight="SemiBold" Margin="0,2,0,0"/>
-            <TextBlock Text="{Binding RawCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
-          </StackPanel>
-        </Border>
+    <!-- ============ 概览卡片（折叠式）============ -->
+    <!-- 五个卡片平时只占一行高（42px），只显示标题；鼠标移入才把内容层浮出来。
+         内容层不参与布局（Visibility 切换 + 绝对定位在卡片顶部），所以展开时
+         既不会把下方游戏列表推下去，也不会引起窗口内任何重排。
+         外层 Grid 必须 ClipToBounds="False"（默认值），否则浮出的内容会被裁掉。 -->
+    <Grid Grid.Row="0" Margin="16,10,16,10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition/>
+        <ColumnDefinition/>
+        <ColumnDefinition/>
+        <ColumnDefinition/>
+        <ColumnDefinition/>
+      </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="1" Style="{StaticResource StatCard}" Margin="0,0,10,0">
-          <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatPlaytime}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
-            <TextBlock Text="{Binding TotalPlaytimeText}" FontSize="21" FontWeight="SemiBold" Margin="0,2,0,0"/>
-            <TextBlock Text="{Binding PlayedCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
-          </StackPanel>
-        </Border>
+      <!-- 概览条顺序（用户指定）：库存总数 → MC 分数分布 → 总时长 → 近两周 → 最常玩。
+           第 2 张原为「库存价值」（已废弃整块价格功能），现改为 Metacritic 分数分布。 -->
 
-        <Border Grid.Column="2" Style="{StaticResource StatCard}" Margin="0,0,10,0">
-          <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatRecent}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
-            <TextBlock Text="{Binding RecentPlaytimeText}" FontSize="21" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,2,0,0"/>
-            <TextBlock Text="{Binding ActiveCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
-          </StackPanel>
+      <!-- 1. 库存总数 -->
+      <Grid Grid.Column="0" Margin="0,0,10,0">
+        <Border x:Name="CardGames" Style="{StaticResource StatCard}" Height="52">
+          <TextBlock Style="{StaticResource StatCardTitle}" Text="{DynamicResource LocStatGames}"/>
         </Border>
+        <Popup PlacementTarget="{Binding ElementName=CardGames}"
+               Placement="Bottom" HorizontalOffset="0" VerticalOffset="8"
+               AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+          <Popup.IsOpen>
+            <!-- 卡片自身悬停 或 小窗内容悬停 → 打开。
+                 Popup 在独立窗口层，鼠标移进去时卡片的 IsMouseOver 会变 false，
+                 所以必须把「小窗内容悬停」也算进来，否则鼠标一碰小窗它就闪没了。 -->
+            <MultiBinding Converter="{StaticResource AnyTrue}" Mode="OneWay">
+              <Binding Path="IsMouseOver" ElementName="CardGames"/>
+              <Binding Path="IsMouseOver" ElementName="CardGamesFly"/>
+            </MultiBinding>
+          </Popup.IsOpen>
+          <Border x:Name="CardGamesFly" Style="{StaticResource StatCardFlyout}" Width="230">
+            <!-- 浮窗内容不重复卡片标题（悬停才出现，标题已在卡片上）。
+                 大数字用 Accent（蓝→紫渐变），和「近两周时长」右侧的数值同色。 -->
+            <StackPanel>
+              <TextBlock Text="{Binding EntryCountText}" FontSize="21" FontWeight="SemiBold"
+                         Foreground="{StaticResource Accent}"/>
+              <TextBlock Text="{Binding RawCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,3,0,0"/>
 
-        <Border Grid.Column="3" Style="{StaticResource StatCard}" Margin="0,0,10,0">
-          <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatTop}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
-            <TextBlock Text="{Binding TopGameName}" FontSize="14.5" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding TopGameTimeText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,3,0,0"/>
-          </StackPanel>
-        </Border>
-
-        <Border Grid.Column="4" Style="{StaticResource StatCard}">
-          <StackPanel>
-            <TextBlock Text="{DynamicResource LocStatScore}" FontSize="13" Foreground="{StaticResource TextFaint}"/>
-            <TextBlock Text="{Binding AverageScoreText}" FontSize="21" FontWeight="SemiBold" Margin="0,2,0,0"/>
-            <TextBlock Text="{Binding ScoredCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,2,0,0"/>
-          </StackPanel>
-        </Border>
+              <!-- 逐库明细：Steam 多少款、占库存百分之几……（按款数降序，各库之和 = 库存总数） -->
+              <ItemsControl ItemsSource="{Binding SourceCountRows}" Margin="0,7,0,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,2,0,0">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11.5"
+                                 Foreground="{StaticResource TextDim}"
+                                 TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                      <TextBlock Grid.Column="1" FontSize="11.5" FontWeight="SemiBold"
+                                 Foreground="{StaticResource Accent}">
+                        <Run Text="{Binding Count, Mode=OneWay}"/>
+                        <Run Text=" · " Foreground="{StaticResource TextFaint}" FontWeight="Normal"/>
+                        <Run Text="{Binding ShareText, Mode=OneWay}"/>
+                      </TextBlock>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </Popup>
       </Grid>
-    </Border>
+
+      <!-- 2. MC 分数分布 -->
+      <Grid Grid.Column="1" Margin="0,0,10,0">
+        <Border x:Name="CardScore" Style="{StaticResource StatCard}" Height="52">
+          <TextBlock Style="{StaticResource StatCardTitle}" Text="{DynamicResource LocStatScoreDist}"/>
+        </Border>
+        <Popup PlacementTarget="{Binding ElementName=CardScore}"
+               Placement="Bottom" HorizontalOffset="0" VerticalOffset="8"
+               AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+          <Popup.IsOpen>
+            <!-- 卡片自身悬停 或 小窗内容悬停 → 打开。
+                 Popup 在独立窗口层，鼠标移进去时卡片的 IsMouseOver 会变 false，
+                 所以必须把「小窗内容悬停」也算进来，否则鼠标一碰小窗它就闪没了。 -->
+            <MultiBinding Converter="{StaticResource AnyTrue}" Mode="OneWay">
+              <Binding Path="IsMouseOver" ElementName="CardScore"/>
+              <Binding Path="IsMouseOver" ElementName="CardScoreFly"/>
+            </MultiBinding>
+          </Popup.IsOpen>
+          <Border x:Name="CardScoreFly" Style="{StaticResource StatCardFlyout}" Width="230">
+            <StackPanel>
+              <!-- 浮窗内容不重复卡片标题（悬停才出现，标题已在卡片上）。
+                   MC 分数分布：五档，每档「色块 + 档位标签 + 款数」。
+                   配色**不写死十六进制**，而是绑 VM 暴露的 ScoreBrushXX ——
+                   它们与封面右上角评分徽章用的是同一批画刷（见 ScorePalette），
+                   保证「一眼对得上」；其中 90+ 是全局共享的流光渐变，
+                   相位由视图定时器统一推进，因此和封面徽章上的流光完全同步。 -->
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Grid.Column="0" Width="7" Height="7" CornerRadius="2"
+                        Background="{Binding ScoreBrush90}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="90+" FontSize="11.5"
+                           Foreground="{StaticResource TextDim}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding ScoreBucket90Text}" FontSize="12"
+                           FontWeight="SemiBold" Foreground="{Binding ScoreBrush90}" Margin="8,0,0,0"/>
+
+                <Border Grid.Row="1" Grid.Column="0" Width="7" Height="7" CornerRadius="2"
+                        Background="{Binding ScoreBrush80}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="80-89" FontSize="11.5"
+                           Foreground="{StaticResource TextDim}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding ScoreBucket80Text}" FontSize="12"
+                           FontWeight="SemiBold" Foreground="{Binding ScoreBrush80}" Margin="8,0,0,0"/>
+
+                <Border Grid.Row="2" Grid.Column="0" Width="7" Height="7" CornerRadius="2"
+                        Background="{Binding ScoreBrush70}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="70-79" FontSize="11.5"
+                           Foreground="{StaticResource TextDim}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding ScoreBucket70Text}" FontSize="12"
+                           FontWeight="SemiBold" Foreground="{Binding ScoreBrush70}" Margin="8,0,0,0"/>
+
+                <Border Grid.Row="3" Grid.Column="0" Width="7" Height="7" CornerRadius="2"
+                        Background="{Binding ScoreBrush60}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="60-69" FontSize="11.5"
+                           Foreground="{StaticResource TextDim}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding ScoreBucket60Text}" FontSize="12"
+                           FontWeight="SemiBold" Foreground="{Binding ScoreBrush60}" Margin="8,0,0,0"/>
+
+                <Border Grid.Row="4" Grid.Column="0" Width="7" Height="7" CornerRadius="2"
+                        Background="{Binding ScoreBrushLow}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{DynamicResource LocScoreBelow60}" FontSize="11.5"
+                           Foreground="{StaticResource TextDim}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="3" Text="{Binding ScoreBucketLowText}" FontSize="12"
+                           FontWeight="SemiBold" Foreground="{Binding ScoreBrushLow}" Margin="8,0,0,0"/>
+              </Grid>
+
+              <TextBlock Text="{Binding ScoreDistSubText}" FontSize="11.5"
+                         Foreground="{StaticResource TextFaint}" Margin="0,5,0,0"
+                         TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+          </Border>
+        </Popup>
+      </Grid>
+
+      <!-- 3. 总游戏时长 -->
+      <Grid Grid.Column="2" Margin="0,0,10,0">
+        <Border x:Name="CardTime" Style="{StaticResource StatCard}" Height="52">
+          <TextBlock Style="{StaticResource StatCardTitle}" Text="{DynamicResource LocStatPlaytime}"/>
+        </Border>
+        <Popup PlacementTarget="{Binding ElementName=CardTime}"
+               Placement="Bottom" HorizontalOffset="0" VerticalOffset="8"
+               AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+          <Popup.IsOpen>
+            <!-- 卡片自身悬停 或 小窗内容悬停 → 打开。
+                 Popup 在独立窗口层，鼠标移进去时卡片的 IsMouseOver 会变 false，
+                 所以必须把「小窗内容悬停」也算进来，否则鼠标一碰小窗它就闪没了。 -->
+            <MultiBinding Converter="{StaticResource AnyTrue}" Mode="OneWay">
+              <Binding Path="IsMouseOver" ElementName="CardTime"/>
+              <Binding Path="IsMouseOver" ElementName="CardTimeFly"/>
+            </MultiBinding>
+          </Popup.IsOpen>
+          <Border x:Name="CardTimeFly" Style="{StaticResource StatCardFlyout}" Width="210">
+            <StackPanel>
+              <!-- 浮窗内容不重复卡片标题（悬停才出现，标题已在卡片上）。
+                   大数字与逐库时长都用 Accent（蓝→紫渐变），和「近两周时长」右侧同色。 -->
+              <TextBlock Text="{Binding TotalPlaytimeText}" FontSize="21" FontWeight="SemiBold"
+                         Foreground="{StaticResource Accent}"/>
+              <TextBlock Text="{Binding PlayedCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,3,0,0"/>
+
+              <!-- 逐库明细：Steam 多少、Epic 多少……（时长 &gt; 0 的库才列出，按时长降序） -->
+              <ItemsControl ItemsSource="{Binding SourcePlayRows}" Margin="0,7,0,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,2,0,0">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11.5"
+                                 Foreground="{StaticResource TextDim}"
+                                 TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                      <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="11.5"
+                                 FontWeight="SemiBold" Foreground="{StaticResource Accent}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </Popup>
+      </Grid>
+
+      <!-- 4. 近两周时长：浮出层列出每一款近期活跃的游戏及其这两周玩了多久
+           （按近两周时长降序，最多 Top 8；数据在 VaultView.cs 里组装成 RecentRows） -->
+      <Grid Grid.Column="3" Margin="0,0,10,0">
+        <Border x:Name="CardRecent" Style="{StaticResource StatCard}" Height="52">
+          <TextBlock Style="{StaticResource StatCardTitle}" Text="{DynamicResource LocStatRecent}"/>
+        </Border>
+        <Popup PlacementTarget="{Binding ElementName=CardRecent}"
+               Placement="Bottom" HorizontalOffset="0" VerticalOffset="8"
+               AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+          <Popup.IsOpen>
+            <!-- 卡片自身悬停 或 小窗内容悬停 → 打开。
+                 Popup 在独立窗口层，鼠标移进去时卡片的 IsMouseOver 会变 false，
+                 所以必须把「小窗内容悬停」也算进来，否则鼠标一碰小窗它就闪没了。 -->
+            <MultiBinding Converter="{StaticResource AnyTrue}" Mode="OneWay">
+              <Binding Path="IsMouseOver" ElementName="CardRecent"/>
+              <Binding Path="IsMouseOver" ElementName="CardRecentFly"/>
+            </MultiBinding>
+          </Popup.IsOpen>
+          <Border x:Name="CardRecentFly" Style="{StaticResource StatCardFlyout}" Width="268">
+            <StackPanel>
+              <!-- 浮窗内容不重复卡片标题（悬停才出现，标题已在卡片上） -->
+              <TextBlock Text="{Binding RecentPlaytimeText}" FontSize="21" FontWeight="SemiBold"
+                         Foreground="{StaticResource Accent}"/>
+              <TextBlock Text="{Binding ActiveCountText}" FontSize="12.5" Foreground="{StaticResource TextFaint}" Margin="0,3,0,0"/>
+
+              <!-- 逐款近两周时长列表 -->
+              <ItemsControl ItemsSource="{Binding RecentRows}" Margin="0,7,0,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,2,0,0">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11.5"
+                                 Foreground="{StaticResource TextDim}"
+                                 TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                      <TextBlock Grid.Column="1" Text="{Binding Time}" FontSize="11.5"
+                                 FontWeight="SemiBold" Foreground="{StaticResource Accent}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Text="{Binding RecentRowsHint}" FontSize="11"
+                         Foreground="{StaticResource TextFaint}" Margin="0,5,0,0"
+                         TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+          </Border>
+        </Popup>
+      </Grid>
+
+      <!-- 5. 最肝游戏 -->
+      <Grid Grid.Column="4">
+        <Border x:Name="CardTop" Style="{StaticResource StatCard}" Height="52">
+          <TextBlock Style="{StaticResource StatCardTitle}" Text="{DynamicResource LocStatTop}"/>
+        </Border>
+        <Popup PlacementTarget="{Binding ElementName=CardTop}"
+               Placement="Bottom" HorizontalOffset="0" VerticalOffset="8"
+               AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+          <Popup.IsOpen>
+            <!-- 卡片自身悬停 或 小窗内容悬停 → 打开。
+                 Popup 在独立窗口层，鼠标移进去时卡片的 IsMouseOver 会变 false，
+                 所以必须把「小窗内容悬停」也算进来，否则鼠标一碰小窗它就闪没了。 -->
+            <MultiBinding Converter="{StaticResource AnyTrue}" Mode="OneWay">
+              <Binding Path="IsMouseOver" ElementName="CardTop"/>
+              <Binding Path="IsMouseOver" ElementName="CardTopFly"/>
+            </MultiBinding>
+          </Popup.IsOpen>
+          <Border x:Name="CardTopFly" Style="{StaticResource StatCardFlyout}" Width="300">
+            <StackPanel>
+              <!-- 时长 Top 5：每行「名次 + 游戏名 + 时长」，与「近两周时长」浮窗同一套排版。
+                   浮窗不重复显示卡片标题（悬停才出现，标题已在卡片上）。 -->
+              <ItemsControl ItemsSource="{Binding TopPlayRows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,2,0,0">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="18"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Grid.Column="0" Text="{Binding Rank}" FontSize="11.5"
+                                 FontWeight="SemiBold" Foreground="{StaticResource Accent}"
+                                 TextAlignment="Right" Margin="0,0,8,0"/>
+                      <!-- 名字不截断：改为换行显示全名（悬停窗宁可变高也不截断） -->
+                      <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11.5"
+                                 Foreground="{StaticResource TextDim}"
+                                 TextWrapping="Wrap" Margin="0,0,10,0"/>
+                      <TextBlock Grid.Column="2" Text="{Binding Time}" FontSize="11.5"
+                                 FontWeight="SemiBold" Foreground="{StaticResource Accent}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+            </StackPanel>
+          </Border>
+        </Popup>
+      </Grid>
+    </Grid>
 
     <!-- ============ 游戏列表 ============ -->
-    <Grid Grid.Row="2">
+    <Grid Grid.Row="1">
       <ListBox x:Name="GameList"
                Background="Transparent"
                BorderThickness="0"
@@ -971,77 +1879,605 @@
     </Grid>
 
     <!-- ============ 状态栏 ============ -->
-    <Border x:Name="StatusBar" Grid.Row="3" Background="{StaticResource BgPanel}" BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderSoft}" Padding="16,0">
+    <Border x:Name="StatusBar" Grid.Row="2" Background="{StaticResource BgPanel}" BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderSoft}" Padding="16,0">
       <Grid Height="26">
         <TextBlock x:Name="StatusText" Text="{Binding StatusText}" FontSize="13" Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"/>
         <TextBlock x:Name="SourceText" Text="{Binding SourceText}" FontSize="13" Foreground="{StaticResource TextFaint}"
                    VerticalAlignment="Center" HorizontalAlignment="Right"/>
       </Grid>
     </Border>
+      </Grid>
     </Grid>
 
-    <!-- ============ 数据分析页 ============ -->
-    <Grid x:Name="AnalyzePage" Visibility="Collapsed" Background="{StaticResource BgRoot}">
+    <!-- ============ 趣味功能页 ============ -->
+    <!-- 顶栏在外层第 0 行、三页共用；本页只占第 1 行的正文区。
+         ⚠️ 必须写 Grid.Row="1"，否则会落到第 0 行把顶栏完全盖住。
+
+         本页现在只有「待玩清单」和「游戏评价」两个子标签 ——
+         口味转盘、游玩日历都已按用户要求移除。
+         布局为全屏铺满（原来套了 MaxWidth=880，看起来像手机竖屏，用户要求改成和其他页一样全屏）。 -->
+    <Grid x:Name="FunPage" Grid.Row="1" Visibility="Collapsed">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
 
-      <!-- 顶栏：一律「靠左 + 居中」两段，绝不把功能按钮挤到最右侧。
-           原因：窗口右上角是系统的最小化/最大化/关闭按钮所在的标题栏区域，
-           放过去的按钮会与它们抢鼠标（实测点不到），所以功能性按钮统一居中。
-           整条容器声明 chrome 穿透，否则落在 CaptionHeight 区内的按钮点不中。 -->
-      <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderThickness="0,0,0,1"
-              BorderBrush="{StaticResource BorderSoft}" Padding="16,0"
-              shell:WindowChrome.IsHitTestVisibleInChrome="True">
-        <Grid Height="54">
+      <!-- ===== 子标签：待玩清单 / 游戏评价 =====
+           和顶栏的页面下拉框一样，用 Tag="Active" 标记选中项（SegButton 样式里就靠这个 Tag 触发高亮）。 -->
+      <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,14,16,0">
+        <Button x:Name="FunTabWish" Style="{StaticResource SegButton}" Height="32" Padding="18,0"
+                Content="{DynamicResource LocFunTabWish}" Tag="Active"/>
+        <Button x:Name="FunTabReview" Style="{StaticResource SegButton}" Height="32" Padding="18,0"
+                Margin="6,0,0,0" Content="{DynamicResource LocFunTabReview}"/>
+      </StackPanel>
+
+      <!-- ================= 子页一：待玩清单 ================= -->
+      <Grid x:Name="WishPane" Grid.Row="1" Margin="16,10,16,16">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <StackPanel Grid.Row="0">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                       FontSize="17" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
+            <TextBlock Text="{DynamicResource LocFunListTitle}" FontSize="16" FontWeight="SemiBold"
+                       Margin="9,0,0,0" VerticalAlignment="Center"/>
+            <Border x:Name="WishCountBadge" Background="#241D4E" CornerRadius="4" Padding="6,2"
+                    Margin="10,0,0,0" VerticalAlignment="Center">
+              <TextBlock x:Name="WishCountText" Text="0" FontSize="12.5"
+                         Foreground="{StaticResource TextDim}"/>
+            </Border>
+          </StackPanel>
+          <TextBlock Text="{DynamicResource LocFunListSub}" FontSize="12.5" Margin="0,5,0,0"
+                     Foreground="{StaticResource TextFaint}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- ================= 添加：可搜索的下拉复选框 =================
+             点按钮展开一个带搜索框的下拉面板，里面是库存游戏列表，每项前面有复选框。
+             勾上 = 加入清单，取消勾选 = 移出清单（面板不关，可以连着勾好几款）。
+             这里用 Popup 而不是 ComboBox：ComboBox 的语义是"单选一项"，
+             而我们要的是"多项复选 + 长列表 + 实时搜索"，Popup 更合适也更好控制。 -->
+        <Grid Grid.Row="1" Margin="0,14,0,0">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
 
-          <!-- 左：返回 + 标题 -->
-          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button x:Name="BackButton" Style="{StaticResource IconButton}"
-                    Content="&#xE72B;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                    ToolTip="{DynamicResource LocTipBack}" VerticalAlignment="Center"/>
-            <TextBlock Text="&#xE9D9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                       FontSize="17" Foreground="{StaticResource Accent}" Margin="12,0,0,0"
-                       VerticalAlignment="Center"/>
-            <TextBlock x:Name="AnalyzeTitleText" Text="{DynamicResource LocAnalyzeTitle}" FontSize="16.5"
-                       FontWeight="SemiBold" Margin="9,0,0,0" VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" MaxWidth="200"/>
-          </StackPanel>
+          <ToggleButton x:Name="WishPickerToggle" Grid.Column="0" Style="{StaticResource PrimaryToggle}"
+                        Padding="16,0" Height="34"
+                        Content="{DynamicResource LocFunAddToggle}"/>
 
-          <!-- 中：全部功能性按钮。新增按钮只需往这个 StackPanel 里加，
-               它会始终保持在窗口水平中央，不会撞上右上角的系统按钮。 -->
-          <StackPanel x:Name="AnalyzeToolBar" Grid.Column="1" Orientation="Horizontal"
-                      HorizontalAlignment="Center" VerticalAlignment="Center">
-            <!-- 文风切换：锐评 / 正式 -->
-            <Border Background="#151C26" CornerRadius="8" Margin="0,0,10,0">
-              <StackPanel Orientation="Horizontal">
-                <Button x:Name="ToneSnarky" Style="{StaticResource SegButton}"
-                        Content="{DynamicResource LocStyleSnarky}" Tag="Active"
-                        ToolTip="{DynamicResource LocTipReportStyle}"/>
-                <Button x:Name="ToneFormal" Style="{StaticResource SegButton}"
-                        Content="{DynamicResource LocStyleFormal}"
-                        ToolTip="{DynamicResource LocTipReportStyle}"/>
-              </StackPanel>
+          <TextBlock x:Name="WishPickerHint" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center"
+                     FontSize="12.5" Foreground="{StaticResource TextFaint}"
+                     Text="{DynamicResource LocFunPickHint}" TextTrimming="CharacterEllipsis"/>
+
+          <Popup x:Name="WishPickerPopup" PlacementTarget="{Binding ElementName=WishPickerToggle}"
+                 Placement="Bottom" VerticalOffset="6" StaysOpen="False" AllowsTransparency="True"
+                 PopupAnimation="Fade">
+            <!-- 面板高度约占屏幕总高度 1/2（用户要求）：打开时按窗口实际高度算，
+                 这里 480 只是没算出来之前的兜底值；列表区吃掉剩余高度（Grid 的 * 行）。 -->
+            <Border x:Name="WishPickerPanel" Background="#181338" BorderBrush="#332A66"
+                    BorderThickness="1" CornerRadius="10"
+                    Width="560" Height="480" Padding="10">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="*"/>
+                  <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 搜索框。
+                     图标和输入文字**分两列**排，不用「TextBox 加 Padding + 覆盖一个
+                     占位 TextBlock」那种魔法数字叠放：
+                     Padding 能不能生效取决于 Playnite 主题的 TextBox 模板
+                     （本文件 SearchBox 样式里就写死了 PART_ContentHost Margin="0"，
+                     等于把 Padding 彻底忽略），一旦换主题文字就会压到图标上。
+                     分列之后，输入文字和占位提示都从同一列的左边缘起，
+                     对正由布局保证，不再依赖几个手算的 Margin。 -->
+                <Border Grid.Row="0" Background="#130E28" CornerRadius="7" Height="32">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="32"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="13" Foreground="{StaticResource TextFaint}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <TextBox x:Name="WishSearchBox" Grid.Column="1" Style="{StaticResource PickerSearchBox}"
+                             />
+                    <TextBlock x:Name="WishSearchHint" Grid.Column="1" Text="{DynamicResource LocSearchHint}"
+                               Foreground="{StaticResource TextFaint}" FontSize="13"
+                               VerticalAlignment="Center" HorizontalAlignment="Left"
+                               IsHitTestVisible="False"/>
+                  </Grid>
+                </Border>
+
+                <!-- 候选列表（滚动） -->
+                <Grid Grid.Row="1" Margin="0,8,0,0">
+                  <ScrollViewer x:Name="WishPickScroll" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="WishPickList">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <!-- Cursor="Hand"：整行都能点开，行内只有方框之外的地方也可点 -->
+                          <Border x:Name="PickRow" Background="Transparent" CornerRadius="6"
+                                  Padding="6,5" Margin="0,0,0,2" Cursor="Hand">
+                            <Grid>
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                              </Grid.ColumnDefinitions>
+                              <CheckBox Grid.Column="0" Style="{StaticResource VaultCheck}"
+                                        IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center"/>
+                              <Border Grid.Column="1" Width="22" Height="30" CornerRadius="3"
+                                      Background="#130E28" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <Border.Background>
+                                  <ImageBrush ImageSource="{Binding Cover}" Stretch="UniformToFill"
+                                              RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border.Background>
+                              </Border>
+                              <StackPanel Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource TextMain}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Sub}" FontSize="11" Margin="0,1,0,0"
+                                           Foreground="{StaticResource TextFaint}" TextTrimming="CharacterEllipsis"/>
+                              </StackPanel>
+                            </Grid>
+                          </Border>
+                          <DataTemplate.Triggers>
+                            <Trigger SourceName="PickRow" Property="IsMouseOver" Value="True">
+                              <Setter TargetName="PickRow" Property="Background" Value="#2A2154"/>
+                            </Trigger>
+                          </DataTemplate.Triggers>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </ScrollViewer>
+
+                  <TextBlock x:Name="WishPickEmpty" Text="{DynamicResource LocFunPickNoMatch}"
+                             FontSize="12.5" Foreground="{StaticResource TextFaint}"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             Visibility="Collapsed" TextWrapping="Wrap" TextAlignment="Center" Margin="20"/>
+                </Grid>
+
+                <TextBlock x:Name="WishPickCount" Grid.Row="2" FontSize="11.5"
+                           Foreground="{StaticResource TextFaint}" Margin="2,8,0,0"/>
+              </Grid>
             </Border>
-            <Button x:Name="AnalyzeCopyButton" Style="{StaticResource IconButton}"
-                    Content="&#xE72D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                    ToolTip="{DynamicResource LocTipCopyShare}"/>
-          </StackPanel>
-
-          <!-- 右：留白，什么都不放（避免与系统按钮重叠） -->
-          <Border Grid.Column="2" Width="120"/>
+          </Popup>
         </Grid>
-      </Border>
+
+        <!-- ================= 待玩游戏列表（可拖拽排序） ================= -->
+        <Grid Grid.Row="2" Margin="0,14,0,0">
+          <Border Background="#0F151D" CornerRadius="10" Padding="1">
+            <ScrollViewer x:Name="WishScroll" VerticalScrollBarVisibility="Auto">
+              <ItemsControl x:Name="WishList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border x:Name="WishRow" Background="#1F1942" CornerRadius="8"
+                            Padding="8,7" Margin="6,4,6,0">
+                      <Border.ToolTip>
+                        <ToolTip Background="#161130" BorderThickness="1" BorderBrush="#332A66"
+                                 Padding="10,7" Placement="Mouse" HorizontalOffset="10" VerticalOffset="8">
+                          <TextBlock Text="{Binding Tip}" FontSize="12" Foreground="{StaticResource TextMain}"/>
+                        </ToolTip>
+                      </Border.ToolTip>
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto"/>
+                          <ColumnDefinition Width="Auto"/>
+                          <ColumnDefinition Width="Auto"/>
+                          <ColumnDefinition Width="*"/>
+                          <ColumnDefinition Width="Auto"/>
+                          <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 拖动柄：只是个视觉提示。整行按下都能起拖（见 OnWishDragStart），
+                             所以这里的提示文案说的是「按住行」而不是「按住这里」。 -->
+                        <Border Grid.Column="0" x:Name="WishDragHandle" Width="24" Background="Transparent"
+                                Cursor="SizeAll" ToolTip="{DynamicResource LocFunDragTip}">
+                          <TextBlock Text="&#xE76F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                     FontSize="13" Foreground="{StaticResource TextFaint}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+
+                        <!-- 序号（从上到下 1、2、3…，拖拽后会重排） -->
+                        <TextBlock Grid.Column="1" Text="{Binding Index}" FontSize="13"
+                                   FontWeight="SemiBold" Foreground="{StaticResource Accent}"
+                                   VerticalAlignment="Center" MinWidth="26" TextAlignment="Right"
+                                   Margin="4,0,0,0"/>
+
+                        <!-- 小封面 -->
+                        <Border Grid.Column="2" Width="30" Height="40" CornerRadius="4"
+                                Background="#130E28" VerticalAlignment="Center" Margin="10,0,0,0">
+                          <Border.Background>
+                            <ImageBrush ImageSource="{Binding Cover}" Stretch="UniformToFill"
+                                        RenderOptions.BitmapScalingMode="HighQuality"/>
+                          </Border.Background>
+                        </Border>
+
+                        <StackPanel Grid.Column="3" Margin="12,0,10,0" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                     Foreground="{StaticResource TextMain}" TextTrimming="CharacterEllipsis"/>
+                          <TextBlock Text="{Binding Sub}" FontSize="12" Margin="0,3,0,0"
+                                     Foreground="{StaticResource TextFaint}" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <!-- 置顶 -->
+                        <Button Grid.Column="4" Style="{StaticResource IconButton}" Width="28" Height="26"
+                                Content="&#xE74A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                FontSize="12" Tag="pin" ToolTip="{DynamicResource LocFunPin}"/>
+                        <!-- 移除 -->
+                        <Button Grid.Column="5" Style="{StaticResource IconButton}" Width="28" Height="26"
+                                Content="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                FontSize="12" Tag="remove" Margin="4,0,0,0"
+                                ToolTip="{DynamicResource LocFunRemove}"/>
+                      </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <Trigger SourceName="WishRow" Property="IsMouseOver" Value="True">
+                        <Setter TargetName="WishRow" Property="Background" Value="#2A2154"/>
+                        <!-- 整行可拖，悬停时给拖动光标（行内按钮仍显示自身光标） -->
+                        <Setter TargetName="WishRow" Property="Cursor" Value="SizeAll"/>
+                      </Trigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
+
+          <StackPanel x:Name="WishEmptyHint" VerticalAlignment="Center" HorizontalAlignment="Center"
+                      IsHitTestVisible="False">
+            <TextBlock Text="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                       FontSize="30" Foreground="#4C4378" HorizontalAlignment="Center"/>
+            <TextBlock Text="{DynamicResource LocFunListEmpty}" FontSize="13.5" Margin="0,10,0,0"
+                       Foreground="{StaticResource TextDim}" HorizontalAlignment="Center"/>
+            <TextBlock Text="{DynamicResource LocFunListEmptyHint}" FontSize="12" Margin="0,5,0,0"
+                       Foreground="{StaticResource TextFaint}" HorizontalAlignment="Center"
+                       TextWrapping="Wrap" TextAlignment="Center" MaxWidth="300"/>
+          </StackPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,14,0,0">
+          <Button x:Name="WishClearButton" Style="{StaticResource SegButton}" Height="34"
+                  Padding="16,0" Content="{DynamicResource LocFunClear}"/>
+        </StackPanel>
+      </Grid>
+
+      <!-- ================= 子页二：游戏评价 =================
+           流程：顶部下拉搜索并选中游戏 → 展开打分 + 富文本编辑器 → 保存。
+           保存后这款游戏会出现在下方的海报列表里（时长 / MC / 我的评星），
+           点列表里的任意一张海报可以重新进来改。 -->
+      <Grid x:Name="ReviewPane" Grid.Row="1" Visibility="Collapsed" Margin="16,10,16,16">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>   <!-- 标题 -->
+          <RowDefinition Height="Auto"/>   <!-- 选择游戏（可搜索下拉） -->
+          <RowDefinition Height="Auto"/>   <!-- 编辑器（选中游戏后才出现） -->
+          <RowDefinition Height="*"/>      <!-- 已评价海报列表 -->
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <StackPanel Grid.Row="0">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE734;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                       FontSize="17" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
+            <TextBlock Text="{DynamicResource LocReviewTitle}" FontSize="16" FontWeight="SemiBold"
+                       Margin="9,0,0,0" VerticalAlignment="Center"/>
+            <Border x:Name="ReviewCountBadge" Background="#241D4E" CornerRadius="4" Padding="6,2"
+                    Margin="10,0,0,0" VerticalAlignment="Center">
+              <TextBlock x:Name="ReviewCountText" Text="0" FontSize="12.5"
+                         Foreground="{StaticResource TextDim}"/>
+            </Border>
+          </StackPanel>
+          <TextBlock Text="{DynamicResource LocReviewSub}" FontSize="12.5" Margin="0,5,0,0"
+                     Foreground="{StaticResource TextFaint}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- ================= 选择游戏：可搜索的下拉 =================
+             和待玩清单的「添加游戏」同一套做法（ToggleButton + Popup + 搜索框），
+             区别是这里单选：点中一项就收起面板、展开下面的编辑器。
+             用 Popup 而不是 ComboBox 是因为候选是整个库存（可能上千款），
+             ComboBox 自带的筛选框和下拉滚动都撑不住这个量级。 -->
+        <!-- 只有下拉按钮本身：原本右侧还有一段「功能具体介绍」，
+             按用户要求去掉了，所以第二列（*）一并删掉。 -->
+        <Grid Grid.Row="1" Margin="0,14,0,0">
+          <ToggleButton x:Name="ReviewPickerToggle" Style="{StaticResource PrimaryToggle}"
+                        Padding="16,0" Height="34"
+                        Content="{DynamicResource LocReviewPickToggle}"/>
+
+          <Popup x:Name="ReviewPickerPopup" PlacementTarget="{Binding ElementName=ReviewPickerToggle}"
+                 Placement="Bottom" VerticalOffset="6" StaysOpen="False" AllowsTransparency="True"
+                 PopupAnimation="Fade">
+            <Border x:Name="ReviewPickerPanel" Background="#181338" BorderBrush="#332A66"
+                    BorderThickness="1" CornerRadius="10"
+                    Width="480" Height="440" Padding="10">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="*"/>
+                  <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 搜索框：与待玩清单那套一致，图标独占一列，
+                     输入文字和占位提示都从第 1 列左边缘起，对正由布局保证 -->
+                <Border Grid.Row="0" Background="#130E28" CornerRadius="7" Height="32">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="32"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="13" Foreground="{StaticResource TextFaint}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <TextBox x:Name="ReviewSearchBox" Grid.Column="1" Style="{StaticResource PickerSearchBox}"
+                             />
+                    <TextBlock x:Name="ReviewSearchHint" Grid.Column="1" Text="{DynamicResource LocSearchHint}"
+                               Foreground="{StaticResource TextFaint}" FontSize="13"
+                               VerticalAlignment="Center" HorizontalAlignment="Left"
+                               IsHitTestVisible="False"/>
+                  </Grid>
+                </Border>
+
+                <!-- 候选列表（滚动） -->
+                <Grid Grid.Row="1" Margin="0,8,0,0">
+                  <ScrollViewer x:Name="ReviewPickScroll" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="ReviewPickList">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border x:Name="PickRow" Background="Transparent" CornerRadius="6"
+                                  Padding="6,5" Margin="0,0,0,2" Cursor="Hand">
+                            <Grid>
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                              </Grid.ColumnDefinitions>
+                              <!-- 方形图标，不是竖版封面。
+                                   ⚠️ 必须写 Entry.Icon 而不是包装类自己的 Icon 属性：
+                                   图片是懒加载的（首次返回 null，解码完靠 GameEntry.Raise 通知），
+                                   绑 {Binding Icon} 的话通知只发到包装类上、传不回绑定，
+                                   图标就永远空白。写成嵌套路径 Entry.Icon 后，
+                                   WPF 会自己去订阅 Entry.PropertyChanged，一有图就显示。
+                                   这里用 Uniform（而不是 UniformToFill），图标不该被裁切。 -->
+                              <Border Grid.Column="0" Width="26" Height="26" CornerRadius="4"
+                                      Background="#130E28" Margin="2,0,0,0" VerticalAlignment="Center">
+                                <Border.Background>
+                                  <ImageBrush ImageSource="{Binding Entry.Icon, Mode=OneWay}" Stretch="Uniform"
+                                              RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border.Background>
+                              </Border>
+                              <StackPanel Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource TextMain}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Sub}" FontSize="11" Margin="0,1,0,0"
+                                           Foreground="{StaticResource TextFaint}" TextTrimming="CharacterEllipsis"/>
+                              </StackPanel>
+                              <!-- 已打过分的标一个「已评价」，省得翻半天 -->
+                              <Border Grid.Column="2" Background="#2A1F55" CornerRadius="4" Padding="6,2"
+                                      VerticalAlignment="Center" Visibility="{Binding RatedFlag}">
+                                <TextBlock Text="{DynamicResource LocReviewRated}" FontSize="10.5"
+                                           Foreground="{StaticResource Accent}"/>
+                              </Border>
+                            </Grid>
+                          </Border>
+                          <DataTemplate.Triggers>
+                            <Trigger SourceName="PickRow" Property="IsMouseOver" Value="True">
+                              <Setter TargetName="PickRow" Property="Background" Value="#2A2154"/>
+                            </Trigger>
+                          </DataTemplate.Triggers>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </ScrollViewer>
+
+                  <TextBlock x:Name="ReviewPickEmpty" Text="{DynamicResource LocReviewPickNoMatch}"
+                             FontSize="12.5" Foreground="{StaticResource TextFaint}"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             Visibility="Collapsed" TextWrapping="Wrap" TextAlignment="Center" Margin="20"/>
+                </Grid>
+
+                <!-- 底部计数 -->
+                <TextBlock x:Name="ReviewPickCount" Grid.Row="2" Text="" FontSize="11.5" Margin="4,8,2,0"
+                           Foreground="{StaticResource TextFaint}"/>
+              </Grid>
+            </Border>
+          </Popup>
+        </Grid>
+
+        <!-- 没选中游戏时的引导 -->
+        <StackPanel x:Name="ReviewEditorHint" Grid.Row="2" Margin="0,16,0,0" IsHitTestVisible="False">
+          <TextBlock Text="&#xE70F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                     FontSize="24" Foreground="#4C4378" HorizontalAlignment="Center"/>
+          <TextBlock Text="{DynamicResource LocReviewEditorHint}" FontSize="12.5" Margin="0,9,0,0"
+                     Foreground="{StaticResource TextFaint}" HorizontalAlignment="Center"
+                     TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420"/>
+        </StackPanel>
+
+        <!-- ================= 编辑器 ================= -->
+        <Border x:Name="ReviewEditor" Grid.Row="2" Margin="0,14,0,0" Visibility="Collapsed"
+                Background="#0F151D" CornerRadius="10" Padding="14,12"
+                BorderThickness="1" BorderBrush="{StaticResource BorderSoft}">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>   <!-- 星级 + 正在编辑哪款 -->
+              <RowDefinition Height="Auto"/>   <!-- 工具栏 -->
+              <RowDefinition Height="Auto"/>   <!-- 正文 -->
+              <RowDefinition Height="Auto"/>   <!-- 保存 / 删除 -->
+            </Grid.RowDefinitions>
+
+            <!-- 星级（0–10 星） -->
+            <Grid Grid.Row="0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{DynamicResource LocReviewStars}" FontSize="12"
+                           Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"/>
+                <StackPanel x:Name="ReviewStarsPanel" Orientation="Horizontal" Margin="10,0,0,0"
+                            VerticalAlignment="Center"/>
+                <TextBlock x:Name="ReviewStarsValue" Text="" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{StaticResource Accent}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+              <!-- 正在评价哪款 + 上次评价时间：分两行、右对齐、不截断。
+                   MaxWidth 只用来给「游戏名」限宽换行用的（TextWrapping 生效时
+                   文字会完整显示，只是长名字折行），不去掉 TextTrimming 的话
+                   名字一长就又变成省略号了。星级那列是 *，限宽也能保证 10 颗星不被挤没。 -->
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                <TextBlock x:Name="ReviewEditingText" FontSize="12"
+                           Foreground="{StaticResource TextDim}" HorizontalAlignment="Right"
+                           TextWrapping="Wrap" MaxWidth="460"/>
+                <TextBlock x:Name="ReviewUpdatedText" FontSize="11" Margin="0,3,0,0"
+                           Foreground="{StaticResource TextFaint}" HorizontalAlignment="Right"
+                           TextWrapping="Wrap" MaxWidth="460"/>
+              </StackPanel>
+            </Grid>
+
+            <!-- 工具栏 -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,11,0,0">
+              <ToggleButton x:Name="ReviewBlockBody" Style="{StaticResource ToolToggle}"
+                            Content="{DynamicResource LocReviewBody}" Tag="body"/>
+              <ToggleButton x:Name="ReviewBlockH1" Style="{StaticResource ToolToggle}"
+                            Content="{DynamicResource LocReviewH1}" Tag="h1"/>
+              <ToggleButton x:Name="ReviewBlockH2" Style="{StaticResource ToolToggle}"
+                            Content="{DynamicResource LocReviewH2}" Tag="h2"/>
+              <ToggleButton x:Name="ReviewBoldToggle" Style="{StaticResource ToolToggle}"
+                            Content="{DynamicResource LocReviewBold}" Tag="bold"/>
+              <ToggleButton x:Name="ReviewIndentToggle" Style="{StaticResource ToolToggle}"
+                            Content="{DynamicResource LocReviewIndent}" Tag="indent"/>
+              <Button x:Name="ReviewImageButton" Style="{StaticResource ToolButton}"
+                      Content="{DynamicResource LocReviewInsertImg}"/>
+            </StackPanel>
+
+            <!-- 正文。
+                 ⚠️ RichTextBox 不能设 TextWrapping / HorizontalScrollBarVisibility ——
+                 那两个是 TextBox 独有的属性，RichTextBox 挂在上面会直接抛 XAML 异常。
+                 它靠内部的 TextBlock 自行换行，只要外层 Border 宽度定了就行；
+                 正文页宽也不能给死（PageWidth 一旦固定就不跟着控件宽度变了）。 -->
+            <Border Grid.Row="2" Margin="0,10,0,0" Background="#130E28" CornerRadius="8"
+                    BorderThickness="1" BorderBrush="{StaticResource BorderSoft}" MinHeight="170">
+              <RichTextBox x:Name="ReviewBody" Background="Transparent" BorderThickness="0"
+                           Foreground="{StaticResource TextMain}" CaretBrush="{StaticResource Accent}"
+                           SelectionBrush="#3E3570" FontSize="13.5" FontFamily="Segoe UI"
+                           AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Padding="12,10"/>
+            </Border>
+
+            <!-- 操作 -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,12,0,0">
+              <!-- 用 PrimaryButton 而不是 PrimaryToggle：Style.TargetType 必须和元素类型严格一致，
+                   把 TargetType="ToggleButton" 的样式套在 Button 上会抛 XAML 异常。 -->
+              <Button x:Name="ReviewSaveButton" Style="{StaticResource PrimaryButton}"
+                      Content="{DynamicResource LocReviewSave}" Padding="18,0" Height="34"/>
+              <Button x:Name="ReviewDeleteButton" Style="{StaticResource SegButton}"
+                      Content="{DynamicResource LocReviewDelete}" Padding="16,0" Height="34"
+                      Margin="8,0,0,0" Visibility="Collapsed"/>
+              <TextBlock Text="{DynamicResource LocReviewStarsHint}" FontSize="11.5" Margin="14,0,0,0"
+                         Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- ================= 已评价海报列表 ================= -->
+        <Grid Grid.Row="3" Margin="0,18,0,0">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+
+          <TextBlock Grid.Row="0" Text="{DynamicResource LocReviewListTitle}" FontSize="13.5"
+                     FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
+
+          <Grid Grid.Row="1" Margin="0,10,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <ItemsControl x:Name="ReviewList">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border x:Name="ReviewCardBorder" Background="#1E1940" CornerRadius="9"
+                            Padding="7" Margin="0,0,10,10" Width="132" Cursor="Hand">
+                      <StackPanel>
+                        <!-- 海报。同样必须走 Entry.Poster 嵌套路径：
+                             Poster 是懒加载的，绑包装类自己的属性收不到解码完成的通知。 -->
+                        <Border Width="116" Height="162" CornerRadius="6" Background="#130E28">
+                          <Border.Background>
+                            <ImageBrush ImageSource="{Binding Entry.Poster, Mode=OneWay}" Stretch="UniformToFill"
+                                        RenderOptions.BitmapScalingMode="HighQuality"/>
+                          </Border.Background>
+                        </Border>
+                        <TextBlock Text="{Binding Name}" FontSize="11.5" Margin="1,7,0,0"
+                                   FontWeight="SemiBold" Foreground="{StaticResource TextMain}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <!-- 总游玩时长 -->
+                        <TextBlock FontSize="10.5" Margin="1,4,0,0" Foreground="{StaticResource TextFaint}"
+                                   TextTrimming="CharacterEllipsis">
+                          <Run Text="{Binding TimeLabel, Mode=OneWay}"/>
+                        </TextBlock>
+                        <!-- MC 评分 -->
+                        <TextBlock FontSize="10.5" Margin="1,2,0,0" Foreground="{StaticResource TextFaint}"
+                                   TextTrimming="CharacterEllipsis">
+                          <Run Text="{Binding McLabel, Mode=OneWay}"/>
+                        </TextBlock>
+                        <!-- 我的评星：左边星星、右边 x/10。
+                             星星用 10 格固定宽度（打不满时画空星），这样 x/10 那一列
+                             在 WrapPanel 里每张卡都对齐，不会因为星级不同而左右跳动。 -->
+                        <Grid Margin="1,4,0,0">
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Grid.Column="0" Text="{Binding StarsText, Mode=OneWay}"
+                                     FontSize="9.5" Foreground="{Binding StarsBrush}"
+                                     TextTrimming="CharacterEllipsis"/>
+                          <TextBlock Grid.Column="1" Text="{Binding StarsValueText, Mode=OneWay}"
+                                     FontSize="10" FontWeight="SemiBold" Margin="4,0,0,0"
+                                     Foreground="{Binding StarsBrush}"
+                                     VerticalAlignment="Center"/>
+                        </Grid>
+                      </StackPanel>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <Trigger SourceName="ReviewCardBorder" Property="IsMouseOver" Value="True">
+                        <Setter TargetName="ReviewCardBorder" Property="Background" Value="#2A2154"/>
+                      </Trigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+
+            <StackPanel x:Name="ReviewListEmpty" VerticalAlignment="Center"
+                        HorizontalAlignment="Center" IsHitTestVisible="False">
+              <TextBlock Text="&#xE8D1;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         FontSize="28" Foreground="#4C4378" HorizontalAlignment="Center"/>
+              <TextBlock Text="{DynamicResource LocReviewListEmpty}" FontSize="13.5" Margin="0,11,0,0"
+                         Foreground="{StaticResource TextDim}" HorizontalAlignment="Center"/>
+              <TextBlock Text="{DynamicResource LocReviewListEmptyHint}" FontSize="12" Margin="0,5,0,0"
+                         Foreground="{StaticResource TextFaint}" HorizontalAlignment="Center"
+                         TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360"/>
+            </StackPanel>
+          </Grid>
+        </Grid>
+      </Grid>
+    </Grid>
+
+    <!-- ============ 数据分析页 ============ -->
+    <!-- 顶栏已提到外层共用（评价 / 复制分享按钮也搬上去了），这里只剩正文。
+         因此不再需要 RowDefinitions —— 整页就是那个 ScrollViewer。 -->
+    <Grid x:Name="AnalyzePage" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource BgRoot}">
 
       <!-- 正文：整体可滚动。
-           三块内容用 Grid + GridSplitter 排布，用户可以拖动分隔条自由调整各视窗大小。 -->
-      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0">
+           三块内容用 Grid + GridSplitter 排布，用户可以拖动分隔条自由调整各视窗大小。
+           HorizontalScrollBarVisibility="Disabled" 必须显式写：时间轴 / 周报都是超宽长图，
+           一旦这一层允许横向滚动，整页底部就会挂出一条能左右拖的滚动条。 -->
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0">
         <Grid Margin="16,14,16,24">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -1061,9 +2497,17 @@
               <RowDefinition x:Name="RowTop" Height="420" MinHeight="240"/>
               <!-- 横向分隔条 -->
               <RowDefinition Height="Auto"/>
-              <!-- 第二排：游玩时间轴（固定高度，内容本身就是横向铺满） -->
+              <!-- 第二排：游玩时间轴（高度可拖）。默认 300，够看一整年的柱子；下限 170
+                   保证最矮时仍能完整显示月份的标签行和周标签行，不会把柱形区挤没。 -->
+              <RowDefinition x:Name="RowTimeline" Height="300" MinHeight="170"/>
+              <!-- 时间轴 / 周报 之间的横向分隔条 -->
               <RowDefinition Height="Auto"/>
-              <!-- 第三排：报告（含推荐），高度可拖 -->
+              <!-- 第三排：游戏周报（高度可拖）。默认 260，海报 40px + 两档错开 + 日期/占比两行
+                   刚好放下；下限 190 是为了保证最矮时仍能看到一整行海报和它下面的日期。 -->
+              <RowDefinition x:Name="RowWeekly" Height="260" MinHeight="190"/>
+              <!-- 周报 / 报告 之间的横向分隔条 -->
+              <RowDefinition Height="Auto"/>
+              <!-- 第四排：玩家画像报告，高度可拖 -->
               <RowDefinition x:Name="RowReport" Height="*" MinHeight="220"/>
             </Grid.RowDefinitions>
 
@@ -1092,7 +2536,7 @@
                     <TextBlock Text="{DynamicResource LocPanelGenresSub}" FontSize="12" Margin="0,3,0,0"
                                Foreground="{StaticResource TextFaint}" TextWrapping="Wrap" MaxWidth="260"/>
                   </StackPanel>
-                  <Border x:Name="GenreBasisToggle" Background="#151C26" CornerRadius="7" Padding="0"
+                  <Border x:Name="GenreBasisToggle" Background="#1A1538" CornerRadius="7" Padding="0"
                           HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10,0,0,0">
                     <StackPanel Orientation="Horizontal">
                       <Button x:Name="BasisTime" Style="{StaticResource SegButton}" Tag="Active"
@@ -1108,7 +2552,7 @@
                             VerticalAlignment="Center" HorizontalAlignment="Center"
                             Visibility="Collapsed" Margin="0,24,0,0">
                   <TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                             FontSize="34" Foreground="#3A4759" HorizontalAlignment="Center"/>
+                             FontSize="34" Foreground="#4C4378" HorizontalAlignment="Center"/>
                   <TextBlock Text="{DynamicResource LocNoGenreData}" FontSize="14" Margin="0,10,0,0"
                              Foreground="{StaticResource TextDim}" HorizontalAlignment="Center"/>
                   <TextBlock Text="{DynamicResource LocNoGenreHint}" FontSize="12" Margin="0,5,0,0"
@@ -1155,7 +2599,7 @@
                           </Border>
                           <DataTemplate.Triggers>
                             <Trigger SourceName="LegendRow" Property="IsMouseOver" Value="True">
-                              <Setter TargetName="LegendRow" Property="Background" Value="#1E2734"/>
+                              <Setter TargetName="LegendRow" Property="Background" Value="#2A2154"/>
                             </Trigger>
                           </DataTemplate.Triggers>
                         </DataTemplate>
@@ -1174,7 +2618,7 @@
               <GridSplitter.Template>
                 <ControlTemplate TargetType="GridSplitter">
                   <Border Background="Transparent">
-                    <Border Width="3" CornerRadius="2" Background="#26313F" x:Name="Grip"
+                    <Border Width="3" CornerRadius="2" Background="#2F2760" x:Name="Grip"
                             HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
                   </Border>
                   <ControlTemplate.Triggers>
@@ -1220,7 +2664,7 @@
 
                           <!-- 小封面（走 Border 背景才能跟圆角一致） -->
                           <Border Grid.Column="1" Width="26" Height="26" CornerRadius="4"
-                                  Background="#0E141C" VerticalAlignment="Center">
+                                  Background="#130E28" VerticalAlignment="Center">
                             <Border.Background>
                               <ImageBrush ImageSource="{Binding Entry.Cover}" Stretch="UniformToFill"
                                           RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -1234,7 +2678,7 @@
                           <!-- 占比条：一眼看出 Top 50 内部的长短差异。
                                宽度用比例条（占 Column3 的百分比），随列宽自适应。 -->
                           <Border Grid.Column="3" Width="76" Height="4" CornerRadius="2"
-                                  Background="#232D3B" VerticalAlignment="Center" Margin="0,0,12,0">
+                                  Background="#2C2459" VerticalAlignment="Center" Margin="0,0,12,0">
                             <Border HorizontalAlignment="Left" CornerRadius="2" Background="{StaticResource Accent}"
                                     Width="{Binding BarWidth}"/>
                           </Border>
@@ -1259,7 +2703,7 @@
             <GridSplitter.Template>
               <ControlTemplate TargetType="GridSplitter">
                 <Border Background="Transparent">
-                  <Border Height="3" CornerRadius="2" Background="#26313F" x:Name="Grip"
+                  <Border Height="3" CornerRadius="2" Background="#2F2760" x:Name="Grip"
                           HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
                 </Border>
                 <ControlTemplate.Triggers>
@@ -1271,33 +2715,54 @@
             </GridSplitter.Template>
           </GridSplitter>
 
-          <!-- 第二排：游玩时间轴。以月为间隔，每一周画一根柱，柱高 = 当周时长，
-               悬停显示那一周玩得最多的游戏与时长。 -->
+          <!-- 第二排：游玩时间轴。按年查看，一年 52 周横向铺成一条可左右拖动的长条，
+               悬停某一周弹出「封面 + 游戏名 + 时长」的信息卡。 -->
           <Border Grid.Row="2" Style="{StaticResource StatCard}" Padding="18,14" Margin="0,0,0,10">
             <Grid>
               <Grid.RowDefinitions>
+                <!-- 标题行按内容高度 -->
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
+                <!-- 图表行必须吃满剩余空间：外层那一行拖高时，这张卡片跟着变高，
+                     图表也就跟着在竖直方向自适应填充（Row 用 * 是关键，
+                     写成 Auto 的话图表只会顶到自己的期望高度，拖高也长不起来）。 -->
+                <RowDefinition Height="*"/>
               </Grid.RowDefinitions>
 
-              <StackPanel Grid.Row="0" Orientation="Horizontal">
-                <TextBlock Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="16" Foreground="#60A5FA" VerticalAlignment="Center"/>
-                <TextBlock Text="{DynamicResource LocPanelTimeline}" FontSize="15" FontWeight="SemiBold"
-                           Margin="9,0,0,0" VerticalAlignment="Center"/>
-                <TextBlock Text="{DynamicResource LocPanelTimelineSub}" FontSize="12"
-                           Foreground="{StaticResource TextFaint}" Margin="12,0,0,0"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                <TextBlock x:Name="TimelineSpanText" FontSize="12" Margin="14,0,0,0"
-                           Foreground="{StaticResource TextDim}" VerticalAlignment="Center"/>
-              </StackPanel>
+              <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                  <TextBlock Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="16" Foreground="#60A5FA" VerticalAlignment="Center"/>
+                  <TextBlock Text="{DynamicResource LocPanelTimeline}" FontSize="15" FontWeight="SemiBold"
+                             Margin="9,0,0,0" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="TimelineSpanText" FontSize="12" Margin="14,0,0,0"
+                             Foreground="{StaticResource TextDim}" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- 年份选择：切换后重新聚合该年的每一周 -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                            x:Name="TimelineYearBox" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                  <TextBlock Text="&#xE787;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="13" Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"
+                             Margin="0,0,7,0"/>
+                  <TextBlock Text="{DynamicResource LocTimelineYear}" FontSize="12"
+                             Foreground="{StaticResource TextFaint}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                  <ComboBox x:Name="TimelineYearSelect" Width="94" FontSize="12.5"
+                            VerticalAlignment="Center" Style="{StaticResource FieldCombo}"/>
+                </StackPanel>
+              </Grid>
 
               <!-- 空态：没有 GameActivity 数据时盖住图表，给出安装指引 -->
               <StackPanel x:Name="TimelineEmptyHint" Grid.Row="1"
                           VerticalAlignment="Center" HorizontalAlignment="Center"
                           Visibility="Collapsed" Margin="0,22,0,22">
                 <TextBlock Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="30" Foreground="#3A4759" HorizontalAlignment="Center"/>
+                           FontSize="30" Foreground="#4C4378" HorizontalAlignment="Center"/>
                 <TextBlock Text="{DynamicResource LocTimelineNoData}" FontSize="13.5" Margin="0,10,0,0"
                            Foreground="{StaticResource TextDim}" HorizontalAlignment="Center"/>
                 <TextBlock Text="{DynamicResource LocTimelineNoDataHint}" FontSize="12" Margin="0,5,0,0"
@@ -1305,22 +2770,113 @@
                            TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420"/>
               </StackPanel>
 
-              <local:TimelineChart x:Name="PlayTimeline" Grid.Row="1" Height="240" Margin="0,12,0,0"/>
+              <!-- 一年 52 周排成一条长条，这里横向滚动（可用鼠标左右拖动查看整年）。
+                   高度不写死：由外层那一行（可拖拽）决定，拖分隔条就能把时间轴拉高/压矮。 -->
+              <ScrollViewer x:Name="TimelineScroll" Grid.Row="1" Margin="0,12,0,0"
+                            HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                            PanningMode="HorizontalOnly" CanContentScroll="False"
+                            Focusable="False">
+                <local:TimelineChart x:Name="PlayTimeline" VerticalAlignment="Stretch"/>
+              </ScrollViewer>
             </Grid>
           </Border>
 
-          <!-- 第三排：玩家画像报告 + 推荐 -->
-          <Border Grid.Row="3" Style="{StaticResource StatCard}" Padding="18,16" MinHeight="200">
+          <!-- 时间轴 / 报告 之间的分隔条：拖它改两块的上下占比 -->
+
+          <!-- ================= 第三排：游戏周报 =================
+               近一年的逐周时间轴，每一周用「当周玩得最多的那款游戏」的海报缩略图代表。
+               横向滚动由 ScrollViewer 提供；控件自己把 Width 撑到 53 周的内容宽度。 -->
+          <Border Grid.Row="4" Style="{StaticResource StatCard}" Padding="14,12" MinHeight="190">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE9D9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                           FontSize="16" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
+                <TextBlock Text="{DynamicResource LocPanelWeekly}" FontSize="15" FontWeight="SemiBold"
+                           Margin="9,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="WeeklySpanText" Text="" FontSize="12"
+                           Foreground="{StaticResource Accent}" Margin="12,0,0,0"
+                           VerticalAlignment="Center"/>
+              </StackPanel>
+
+              <Grid Grid.Row="1" Margin="0,10,0,0">
+                <!-- 横向铺 53 周。图表自己占满视口宽度，超出部分靠内部偏移露出；
+                     左右移动由下面那条水平滚动条驱动（滚轮保持页面上下滚动）。 -->
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="*"/>
+                  <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid x:Name="WeeklyScroll" Background="Transparent" ClipToBounds="True">
+                  <local:WeeklyReportChart x:Name="WeeklyChart" VerticalAlignment="Stretch"
+                                           HorizontalAlignment="Stretch" ClipToBounds="True"/>
+                </Grid>
+
+                <!-- 水平滚动条：拖它左右浏览整年时间线 -->
+                <ScrollBar x:Name="WeeklyHBar" Grid.Row="1" Orientation="Horizontal"
+                           Style="{StaticResource SlimHScrollBar}" Margin="0,9,0,0"
+                           Minimum="0" Focusable="False"/>
+
+                <StackPanel x:Name="WeeklyEmptyHint" VerticalAlignment="Center"
+                            HorizontalAlignment="Center" IsHitTestVisible="False">
+                  <TextBlock Text="&#xE8F1;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="26" Foreground="#4C4378" HorizontalAlignment="Center"/>
+                  <TextBlock Text="{DynamicResource LocWeeklyEmptyHint}" FontSize="13" Margin="0,9,0,0"
+                             Foreground="{StaticResource TextDim}" HorizontalAlignment="Center"/>
+                </StackPanel>
+              </Grid>
+            </Grid>
+          </Border>
+          <GridSplitter Grid.Row="3" Height="8" HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center" Background="Transparent"
+                        ShowsPreview="False" ResizeDirection="Rows"
+                        Cursor="SizeNS" ToolTip="{DynamicResource LocTipSplitTimeline}" x:Name="SplitTimeline">
+            <GridSplitter.Template>
+              <ControlTemplate TargetType="GridSplitter">
+                <Border Background="Transparent">
+                  <Border Height="3" CornerRadius="2" Background="#2F2760" x:Name="Grip"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Grip" Property="Background" Value="#4CC2FF"/>
+                  </Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </GridSplitter.Template>
+          </GridSplitter>
+
+          <!-- 第三排：玩家画像报告 -->
+          <!-- 周报 / 报告 之间的分隔条：拖它改周报区块的高度（跨会话保留） -->
+          <GridSplitter Grid.Row="5" Height="8" HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center" Background="Transparent"
+                        ShowsPreview="False" ResizeDirection="Rows"
+                        Cursor="SizeNS" ToolTip="{DynamicResource LocTipSplitWeekly}" x:Name="SplitWeekly">
+            <GridSplitter.Template>
+              <ControlTemplate TargetType="GridSplitter">
+                <Border Background="Transparent">
+                  <Border Height="3" CornerRadius="2" Background="#2F2760" x:Name="Grip"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Grip" Property="Background" Value="#4CC2FF"/>
+                  </Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </GridSplitter.Template>
+          </GridSplitter>
+          <Border Grid.Row="6" Style="{StaticResource StatCard}" Padding="18,16" MinHeight="200">
             <StackPanel>
               <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#xE9F9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                            FontSize="16" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
                 <TextBlock Text="{DynamicResource LocPanelReport}" FontSize="15" FontWeight="SemiBold"
                            Margin="9,0,0,0" VerticalAlignment="Center"/>
-                <Border x:Name="ToneBadge" Background="#1C2634" CornerRadius="4" Padding="6,2"
-                        Margin="10,0,0,0" VerticalAlignment="Center">
-                  <TextBlock x:Name="ToneBadgeText" FontSize="11.5" Foreground="{StaticResource TextDim}"/>
-                </Border>
                 <TextBlock Text="{DynamicResource LocPanelReportSub}" FontSize="12"
                            Foreground="{StaticResource TextFaint}" Margin="12,0,0,0"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -1341,6 +2897,7 @@
                       <Border Grid.Column="0" Width="3" CornerRadius="2" Background="{Binding Color}"
                               Margin="0,2,13,2"/>
 
+                      <!-- 每段图标各不相同（数据层指定），这是"八段不用同一个符号"的落点 -->
                       <TextBlock Grid.Column="1" Text="{Binding Icon}" FontSize="17"
                                  FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                  Foreground="{Binding Color}" VerticalAlignment="Top" Margin="0,0,11,0"/>
@@ -1348,7 +2905,39 @@
                       <StackPanel Grid.Column="2">
                         <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextMain}"/>
-                        <TextBlock Text="{Binding Body}" FontSize="13" Margin="0,5,0,0"
+
+                        <!-- ===== 差异化版式 =====
+                             八段如果用同一个模样排出来，读起来就像同一段复制了八遍。
+                             数据层给每段打上 Layout 标签，这里按标签切换呈现方式：
+                               quote → 先给一句「判词」（加左侧竖线，像引文）
+                               stat  → 正文前先摆一行关键数字（等宽字体感 + 底色条）
+                               list  → 正文按条目拆行（行距更大，条目之间留白）
+                               plain → 常规排版
+                             用 Style + DataTrigger 实现，不写 code-behind（离线渲染器测得到）。 -->
+
+                        <!-- ① 判词式：lead 行，左侧一条竖线，像判决书主文 -->
+                        <Border x:Name="LeadQuote" Visibility="Collapsed"
+                                BorderBrush="{Binding Color}" BorderThickness="2,0,0,0"
+                                Padding="9,1,0,1" Margin="0,6,0,0">
+                          <TextBlock Text="{Binding Lead}" FontSize="12.5" FontStyle="Italic"
+                                     Foreground="{Binding Color}" TextWrapping="Wrap" LineHeight="19"/>
+                        </Border>
+
+                        <!-- ② 数字式：lead 行，等宽感的浅底条 -->
+                        <Border x:Name="LeadStat" Visibility="Collapsed"
+                                Background="#141B25" CornerRadius="5" Padding="9,5" Margin="0,6,0,0">
+                          <TextBlock Text="{Binding Lead}" FontSize="12"
+                                     FontFamily="Consolas, Cascadia Mono, monospace"
+                                     Foreground="{StaticResource TextDim}" TextWrapping="Wrap"/>
+                        </Border>
+
+                        <!-- ③ 分条式：lead 行做引导语 -->
+                        <TextBlock x:Name="LeadList" Visibility="Collapsed" Text="{Binding Lead}"
+                                   FontSize="12.5" Foreground="{StaticResource TextFaint}"
+                                   Margin="0,6,0,0" TextWrapping="Wrap"/>
+
+                        <!-- 正文：分条式多行文本行距更大，条与条之间更透气 -->
+                        <TextBlock x:Name="BodyText" Text="{Binding Body}" FontSize="13" Margin="0,5,0,0"
                                    Foreground="{StaticResource TextDim}" TextWrapping="Wrap" LineHeight="21"/>
                       </StackPanel>
 
@@ -1361,199 +2950,26 @@
                                    Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                       </StackPanel>
                     </Grid>
+
+                    <DataTemplate.Triggers>
+                      <!-- 判词式：显示引文行 -->
+                      <DataTrigger Binding="{Binding Layout}" Value="quote">
+                        <Setter TargetName="LeadQuote" Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                      <!-- 数字式：显示数字条 -->
+                      <DataTrigger Binding="{Binding Layout}" Value="stat">
+                        <Setter TargetName="LeadStat" Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                      <!-- 分条式：显示引导语 + 加大行距与段前距 -->
+                      <DataTrigger Binding="{Binding Layout}" Value="list">
+                        <Setter TargetName="LeadList" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="BodyText" Property="LineHeight" Value="25"/>
+                        <Setter TargetName="BodyText" Property="Margin" Value="0,7,0,0"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-
-              <!-- 推荐：同类型的高分好游戏（库内 + AI 库外） -->
-              <Border x:Name="RecommendBlock" Margin="0,4,0,0" Padding="0"
-                      BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderSoft}">
-                <StackPanel Margin="0,14,0,0">
-                  <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE735;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="16" Foreground="#34D399" VerticalAlignment="Center"/>
-                    <TextBlock Text="{DynamicResource LocPanelRecommend}" FontSize="15"
-                               FontWeight="SemiBold" Margin="9,0,0,0" VerticalAlignment="Center"/>
-                    <!-- AI 状态徽章：绿=AI 已启用 / 灰=未配置 -->
-                    <Border x:Name="AiBadge" Background="#1C2634" CornerRadius="4" Padding="6,2"
-                            Margin="10,0,0,0" VerticalAlignment="Center">
-                      <StackPanel Orientation="Horizontal">
-                        <Ellipse x:Name="AiBadgeDot" Width="6" Height="6" Fill="#6B7A8D"
-                                 VerticalAlignment="Center" Margin="0,0,5,0"/>
-                        <TextBlock x:Name="AiBadgeText" FontSize="11.5"
-                                   Foreground="{StaticResource TextDim}" VerticalAlignment="Center"/>
-                      </StackPanel>
-                    </Border>
-                    <TextBlock x:Name="RecommendSubtitle" FontSize="12" Margin="12,0,0,0"
-                               Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"/>
-                    <!-- 刷新按钮：重新问一次 AI（右下角，避开顶栏窗口按钮区） -->
-                    <Button x:Name="AiRefreshButton" Margin="12,0,0,0" Padding="9,3"
-                            VerticalAlignment="Center" Cursor="Hand"
-                            Style="{StaticResource SegButton}">
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                   FontSize="12" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="AiRefreshText" FontSize="11.5" Margin="5,0,0,0"
-                                   VerticalAlignment="Center"/>
-                      </StackPanel>
-                    </Button>
-                    <Button x:Name="AiConfigButton" Margin="8,0,0,0" Padding="9,3"
-                            VerticalAlignment="Center" Cursor="Hand"
-                            Style="{StaticResource SegButton}">
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                   FontSize="12" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="AiConfigText" FontSize="11.5" Margin="5,0,0,0"
-                                   VerticalAlignment="Center"/>
-                      </StackPanel>
-                    </Button>
-                  </StackPanel>
-
-                  <!-- 内联 AI 配置面板（默认收起） -->
-                  <Border x:Name="AiConfigPanel" Margin="0,12,0,0" Padding="14,12" CornerRadius="8"
-                          Background="#131A24" BorderThickness="1" BorderBrush="{StaticResource BorderSoft}"
-                          Visibility="Collapsed">
-                    <StackPanel>
-                      <TextBlock x:Name="AiConfigTitle" FontSize="13" FontWeight="SemiBold"
-                                 Foreground="{StaticResource TextMain}"/>
-                      <TextBlock x:Name="AiConfigHint" FontSize="11.5" Margin="0,4,0,0"
-                                 Foreground="{StaticResource TextFaint}" TextWrapping="Wrap" LineHeight="17"/>
-
-                      <Grid Margin="0,12,0,0" HorizontalAlignment="Left" Width="620">
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="Auto"/>
-                          <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                          <RowDefinition Height="Auto"/>
-                          <RowDefinition Height="Auto"/>
-                          <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <TextBlock x:Name="AiLabelKey" Grid.Row="0" Grid.Column="0" FontSize="12.5"
-                                   Foreground="{StaticResource TextDim}" VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
-                        <TextBox x:Name="AiKeyBox" Grid.Row="0" Grid.Column="1" Height="30"
-                                 Style="{StaticResource FieldBox}" Margin="0,0,0,8"/>
-
-                        <TextBlock x:Name="AiLabelModel" Grid.Row="1" Grid.Column="0" FontSize="12.5"
-                                   Foreground="{StaticResource TextDim}" VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
-                        <TextBox x:Name="AiModelBox" Grid.Row="1" Grid.Column="1" Height="30"
-                                 Style="{StaticResource FieldBox}" Margin="0,0,0,8"/>
-
-                        <TextBlock x:Name="AiLabelEndpoint" Grid.Row="2" Grid.Column="0" FontSize="12.5"
-                                   Foreground="{StaticResource TextDim}" VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
-                        <TextBox x:Name="AiEndpointBox" Grid.Row="2" Grid.Column="1" Height="30"
-                                 Style="{StaticResource FieldBox}"/>
-                      </Grid>
-
-                      <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                        <TextBlock x:Name="AiConfigStatus" FontSize="11.5" VerticalAlignment="Center"
-                                   Margin="0,0,12,0" Foreground="{StaticResource TextFaint}"/>
-                        <Button x:Name="AiSaveButton" Padding="14,5" Cursor="Hand"
-                                Style="{StaticResource SegButton}">
-                          <TextBlock x:Name="AiSaveText" FontSize="12"/>
-                        </Button>
-                      </StackPanel>
-                    </StackPanel>
-                  </Border>
-
-                  <!-- AI 分析中 / 失败提示 -->
-                  <TextBlock x:Name="AiStatusLine" FontSize="12" Margin="0,12,0,0"
-                             Foreground="{StaticResource TextFaint}" TextWrapping="Wrap"
-                             Visibility="Collapsed"/>
-
-                  <!-- 库内推荐（本地算法，始终显示） -->
-                  <StackPanel x:Name="InLibBlock" Margin="0,12,0,0">
-                    <TextBlock x:Name="InLibTitle" FontSize="12.5" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextDim}"/>
-                    <ItemsControl x:Name="RecommendList" Margin="0,9,0,0">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <WrapPanel/>
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                          <Border Width="218" Height="84" Margin="0,0,12,12" CornerRadius="8"
-                                  Background="#151C26" Padding="11,10">
-                            <Grid>
-                              <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                              </Grid.ColumnDefinitions>
-                              <Border Grid.Column="0" Width="42" Height="60" CornerRadius="5"
-                                      Background="#0E141C" VerticalAlignment="Top">
-                                <Border.Background>
-                                  <ImageBrush ImageSource="{Binding Entry.Cover}" Stretch="UniformToFill"
-                                              RenderOptions.BitmapScalingMode="HighQuality"/>
-                                </Border.Background>
-                              </Border>
-                              <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                                <TextBlock Text="{Binding Entry.Name}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextMain}" TextWrapping="Wrap"
-                                           LineHeight="16" MaxHeight="32" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding Reason}" FontSize="11" Margin="0,3,0,0"
-                                           Foreground="{StaticResource TextFaint}" TextWrapping="Wrap"
-                                           LineHeight="14" MaxHeight="28" TextTrimming="CharacterEllipsis"/>
-                              </StackPanel>
-                            </Grid>
-                          </Border>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </StackPanel>
-
-                  <!-- AI 库外推荐：按类型分组，每组一张横条卡片 -->
-                  <StackPanel x:Name="ExternalBlock" Margin="0,6,0,0" Visibility="Collapsed">
-                    <TextBlock x:Name="ExternalTitle" FontSize="12.5" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextDim}"/>
-                    <TextBlock x:Name="ExternalHint" FontSize="11.5" Margin="0,4,0,0"
-                               Foreground="{StaticResource TextFaint}" TextWrapping="Wrap"/>
-                    <ItemsControl x:Name="ExternalList" Margin="0,10,0,0">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                          <Border Margin="0,0,0,10" CornerRadius="8" Background="#131A24"
-                                  BorderThickness="1" BorderBrush="{StaticResource BorderSoft}"
-                                  Padding="13,11">
-                            <StackPanel>
-                              <StackPanel Orientation="Horizontal">
-                                <Border CornerRadius="4" Background="#1E3A5F" Padding="6,2"
-                                        VerticalAlignment="Center">
-                                  <TextBlock Text="{Binding Genre}" FontSize="11.5" FontWeight="SemiBold"
-                                             Foreground="#7DB4F0"/>
-                                </Border>
-                                <TextBlock Text="{Binding Note}" FontSize="11.5" Margin="10,0,0,0"
-                                           Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"
-                                           TextWrapping="Wrap"/>
-                              </StackPanel>
-                              <ItemsControl ItemsSource="{Binding Games}" Margin="0,9,0,0">
-                                <ItemsControl.ItemsPanel>
-                                  <ItemsPanelTemplate>
-                                    <WrapPanel/>
-                                  </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                  <DataTemplate>
-                                    <Border Background="#1B2431" CornerRadius="5" Padding="9,4"
-                                            Margin="0,0,8,8">
-                                      <TextBlock Text="{Binding}" FontSize="12"
-                                                 Foreground="{StaticResource TextMain}"/>
-                                    </Border>
-                                  </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                              </ItemsControl>
-                            </StackPanel>
-                          </Border>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </StackPanel>
-                </StackPanel>
-              </Border>
             </StackPanel>
           </Border>
         </Grid>
@@ -1561,18 +2977,33 @@
       </ScrollViewer>
     </Grid>
 
-    <!-- 轻量 Toast：给那些没有状态栏的页面（分析页）做反馈用。
-         默认收起，ShowToast() 里淡入 → 停留 → 淡出。 -->
-    <Border x:Name="Toast" Visibility="Collapsed" HorizontalAlignment="Center"
-            VerticalAlignment="Bottom" Margin="0,0,0,34" Padding="18,11"
+    <!-- 轻量 Toast：给没有状态栏的页面（分析页 / 趣味页）做反馈用。
+
+         ⚠️ 这里刻意**不用** Popup，而是作为根 Grid 的覆盖层。踩过的坑：
+         ① 最初没写 Grid.Row，默认落进第 0 行（顶栏，Auto 高度），
+            VerticalAlignment="Bottom" 只对齐到「顶栏那一行」的底边，
+            于是提示出现在窗口顶部、还压着顶栏；
+         ② 改用 Popup 确实不撑高度了，但 Popup 是独立的顶层窗口(HWND)，
+            打开时会抢走窗口激活焦点；用户接着点「添加游戏」列表时，
+            Windows 要先做激活握手，那一下 MouseLeftButtonUp 会被吞掉，
+            表现就是「刚加完游戏，列表点不动了」。
+         ③ 现在放进第 1 行（内容行，* 高度）的覆盖层：既贴在底部、
+            又不参与顶栏行的 DesiredSize（窗口高度不变），
+            而且和页面在同一棵可视树里，不存在抢焦点的可能。
+
+         IsHitTestVisible=False + Focusable=False：纯展示，不吃点击也不吃键盘焦点。 -->
+    <Border x:Name="Toast" Grid.Row="1" Panel.ZIndex="99"
+            Visibility="Collapsed" Opacity="0"
+            HorizontalAlignment="Center" VerticalAlignment="Bottom"
+            Margin="0,0,0,34" Padding="18,11" MinWidth="120" MaxWidth="520"
             CornerRadius="10" Background="#1B2532" BorderThickness="1"
-            BorderBrush="{StaticResource BorderSoft}" Opacity="0" IsHitTestVisible="False"
-            Panel.ZIndex="99">
+            BorderBrush="{StaticResource BorderSoft}"
+            IsHitTestVisible="False" Focusable="False">
       <Border.Effect>
         <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.45" Color="#000000"/>
       </Border.Effect>
       <TextBlock x:Name="ToastText" FontSize="13" Foreground="{StaticResource TextMain}"
-                 TextWrapping="Wrap" MaxWidth="520"/>
+                 TextWrapping="Wrap" TextAlignment="Center"/>
     </Border>
   </Grid>
 </UserControl>

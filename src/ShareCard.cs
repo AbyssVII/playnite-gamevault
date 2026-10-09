@@ -27,15 +27,16 @@ namespace GameVault
         private const int Width = 1080;
         private const double Pad = 56;
 
-        // 配色（与插件深色主题一致，但刻意独立于资源字典，避免受主题/语言影响）
-        private static readonly Brush Bg = Frozen("#0B0E14");
-        private static readonly Brush Panel = Frozen("#141B25");
-        private static readonly Brush PanelSoft = Frozen("#1A222E");
-        private static readonly Brush Border = Frozen("#232E3D");
-        private static readonly Brush TextMain = Frozen("#E9F0F8");
-        private static readonly Brush TextDim = Frozen("#A9B7C8");
-        private static readonly Brush TextFaint = Frozen("#7A8899");
-        private static readonly Brush Accent = Frozen("#4CC2FF");
+        // 配色（与插件蓝紫主题一致，但刻意独立于资源字典，避免受主题/语言影响）。
+        // 导出的分享图是脱离插件单独流转的，所以这里必须硬编码一份同样的蓝紫色板。
+        private static readonly Brush Bg = Frozen("#120C24");
+        private static readonly Brush Panel = Frozen("#1A1538");
+        private static readonly Brush PanelSoft = Frozen("#221B48");
+        private static readonly Brush Border = Frozen("#2E2660");
+        private static readonly Brush TextMain = Frozen("#EDE9FA");
+        private static readonly Brush TextDim = Frozen("#C6BEE6");
+        private static readonly Brush TextFaint = Frozen("#8C84B4");
+        private static readonly Brush Accent = Frozen("#7C6BFF");
         private static readonly Brush Green = Frozen("#34D399");
         private static readonly Brush Gold = Frozen("#F5B942");
 
@@ -49,13 +50,13 @@ namespace GameVault
         /// <summary>
         /// 生成分享长图并返回 PNG 字节。失败返回 null（调用方负责提示）。
         /// </summary>
-        public static byte[] Render(VaultData data, ReportTone tone)
+        public static byte[] Render(VaultData data)
         {
             if (data == null || data.MergedCount == 0) return null;
 
             try
             {
-                var visual = BuildVisual(data, tone);
+                var visual = BuildVisual(data);
                 return Rasterize(visual);
             }
             catch
@@ -70,12 +71,8 @@ namespace GameVault
             if (png == null) return null;
             try
             {
-                var root = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-                if (string.IsNullOrEmpty(root)) return null;
-                var dir = Path.Combine(root, "GameVault");
-                Directory.CreateDirectory(dir);
-                var name = "GameVault_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png";
-                var path = Path.Combine(dir, name);
+                var path = DefaultPath();
+                if (path == null) return null;
                 File.WriteAllBytes(path, png);
                 return path;
             }
@@ -85,11 +82,49 @@ namespace GameVault
             }
         }
 
+        /// <summary>
+        /// 「图片\GameVault\GameVault_yyyyMMdd_HHmmss.png」完整路径（目录不存在会先创建）。
+        /// 供保存对话框当默认文件名/初始目录用，失败返回 null。
+        /// </summary>
+        public static string DefaultPath()
+        {
+            try
+            {
+                var root = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+                if (string.IsNullOrEmpty(root)) return null;
+                var dir = Path.Combine(root, "GameVault");
+                Directory.CreateDirectory(dir);
+                var name = "GameVault_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png";
+                return Path.Combine(dir, name);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>把 PNG 写到指定路径（调用方已通过保存对话框确认过），失败返回 false。</summary>
+        public static bool SaveTo(byte[] png, string path)
+        {
+            if (png == null || string.IsNullOrEmpty(path)) return false;
+            try
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllBytes(path, png);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         // ------------------------------------------------------------------
         // 视觉树
         // ------------------------------------------------------------------
 
-        private static FrameworkElement BuildVisual(VaultData data, ReportTone tone)
+        private static FrameworkElement BuildVisual(VaultData data)
         {
             var root = new Border
             {
@@ -106,7 +141,7 @@ namespace GameVault
             stack.Children.Add(BuildStatStrip(data));
             stack.Children.Add(BuildGenreBlock(data));
             stack.Children.Add(BuildTopBlock(data));
-            stack.Children.Add(BuildReportBlock(data, tone));
+            stack.Children.Add(BuildReportBlock(data));
             stack.Children.Add(BuildFooter());
 
             // 先把宽度定死再测量，这样子元素的换行/自适应才有确定结果
@@ -286,10 +321,13 @@ namespace GameVault
             return wrap;
         }
 
-        /// <summary>时长 Top 8 榜单。</summary>
+        /// <summary>时长榜：默认 Top 20（榜单太长会把长图拉得过分长，20 是"够看"与"不太长"的折中）。</summary>
+        private const int TopCount = 20;
+
+        /// <summary>时长 Top 20 榜单：双列排布，避免 20 行把长图拉得太长。</summary>
         private static FrameworkElement BuildTopBlock(VaultData data)
         {
-            var top = data.TopByTime.Take(8).ToList();
+            var top = data.TopByTime.Take(TopCount).ToList();
             if (top.Count == 0) return new StackPanel();
 
             var wrap = new Border
@@ -304,87 +342,115 @@ namespace GameVault
 
             stack.Children.Add(SectionTitle(L10n.T("LocShareTop"), "\uE735"));
 
+            // 两列：20 行 → 每列 10 行，阅读宽度也更好（一行太长眼睛要横跳）
+            var columns = top.Count > 10 ? 2 : 1;
+            var perColumn = (int)Math.Ceiling(top.Count / (double)columns);
             var max = top[0].TotalPlaytime;
-            for (var i = 0; i < top.Count; i++)
+
+            var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            for (var c = 0; c < columns; c++)
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            for (var c = 0; c < columns; c++)
             {
-                var e = top[i];
-                var row = new Grid { Margin = new Thickness(0, 15, 0, 0) };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-
-                var rank = new TextBlock
+                var columnStack = new StackPanel
                 {
-                    Text = (i + 1).ToString(CultureInfo.InvariantCulture),
-                    FontSize = 24,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = i == 0 ? Gold : TextFaint,
-                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(c == 0 ? 0 : 30, 0, c == 0 ? 0 : 0, 0),
                 };
-                Grid.SetColumn(rank, 0);
-                row.Children.Add(rank);
-
-                var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-                nameStack.Children.Add(new TextBlock
-                {
-                    Text = e.Name,
-                    FontSize = 20,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = TextMain,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                });
-                if (!string.IsNullOrEmpty(e.Genres))
-                    nameStack.Children.Add(new TextBlock
-                    {
-                        Text = e.Genres,
-                        FontSize = 14,
-                        Foreground = TextFaint,
-                        Margin = new Thickness(0, 3, 0, 0),
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                    });
-                Grid.SetColumn(nameStack, 1);
-                row.Children.Add(nameStack);
-
-                var time = new TextBlock
-                {
-                    Text = e.TotalText,
-                    FontSize = 19,
-                    Foreground = TextDim,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                };
-                Grid.SetColumn(time, 2);
-                row.Children.Add(time);
-
-                stack.Children.Add(row);
-
-                // 细进度条：一眼看出与榜首的差距
-                var bar = new Border
-                {
-                    Height = 4,
-                    Background = PanelSoft,
-                    CornerRadius = new CornerRadius(2),
-                    Margin = new Thickness(46, 8, 0, 0),
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                };
-                var fill = new Border
-                {
-                    Background = Accent,
-                    CornerRadius = new CornerRadius(2),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Width = max > 0 ? Math.Max(6, 900.0 * e.TotalPlaytime / max) : 6,
-                };
-                bar.Child = fill;
-                stack.Children.Add(bar);
+                var start = c * perColumn;
+                var end = Math.Min(top.Count, start + perColumn);
+                for (var i = start; i < end; i++)
+                    columnStack.Children.Add(BuildTopRow(top[i], i + 1, max));
+                Grid.SetColumn(columnStack, c);
+                grid.Children.Add(columnStack);
             }
 
+            stack.Children.Add(grid);
             return wrap;
         }
 
-        /// <summary>玩家画像摘要：挑 3 段有代表性的，避免长图过长。</summary>
-        private static FrameworkElement BuildReportBlock(VaultData data, ReportTone tone)
+        /// <summary>榜单的一行：名次 + 名称/类型 + 时长 + 与榜首的差距条。</summary>
+        private static FrameworkElement BuildTopRow(GameEntry entry, int rank, ulong max)
         {
-            var sections = ProfileReport.Build(data, tone);
+            var host = new StackPanel { Margin = new Thickness(0, 11, 0, 0) };
+
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+
+            var rankText = new TextBlock
+            {
+                Text = rank.ToString(CultureInfo.InvariantCulture),
+                FontSize = 21,
+                FontWeight = FontWeights.Bold,
+                Foreground = rank == 1 ? Gold : TextFaint,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(rankText, 0);
+            row.Children.Add(rankText);
+
+            var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            nameStack.Children.Add(new TextBlock
+            {
+                Text = entry.Name,
+                FontSize = 18,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = rank <= 3 ? TextMain : TextDim,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+            if (!string.IsNullOrEmpty(entry.Genres))
+                nameStack.Children.Add(new TextBlock
+                {
+                    Text = entry.Genres,
+                    FontSize = 13,
+                    Foreground = TextFaint,
+                    Margin = new Thickness(0, 2, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                });
+            Grid.SetColumn(nameStack, 1);
+            row.Children.Add(nameStack);
+
+            var time = new TextBlock
+            {
+                Text = entry.TotalText,
+                FontSize = 17,
+                Foreground = TextDim,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            Grid.SetColumn(time, 2);
+            row.Children.Add(time);
+
+            host.Children.Add(row);
+
+            // 细进度条：一眼看出与榜首的差距
+            var track = new Border
+            {
+                Height = 3,
+                Background = PanelSoft,
+                CornerRadius = new CornerRadius(2),
+                Margin = new Thickness(38, 6, 0, 0),
+            };
+            var fill = new Border
+            {
+                Background = rank == 1 ? Gold : Accent,
+                CornerRadius = new CornerRadius(2),
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            // 这里拿不到父级实测宽度，按固定基准宽度 × 与榜首的比值来画。
+            var ratio = max > 0 ? Math.Max(0.02, (double)entry.TotalPlaytime / max) : 1.0;
+            fill.Width = 840 * ratio;
+            track.Child = fill;
+            host.Children.Add(track);
+
+            return host;
+        }
+
+        /// <summary>玩家画像摘要：挑 3 段有代表性的，避免长图过长。</summary>
+        private static FrameworkElement BuildReportBlock(VaultData data)
+        {
+            var sections = ProfileReport.Build(data);
             if (sections.Count == 0) return new StackPanel();
 
             var picked = new List<ReportSection>();

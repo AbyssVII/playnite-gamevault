@@ -207,6 +207,28 @@ namespace GameVault
             foreach (var pair in list) sum += pair.Value;
             return sum;
         }
+
+        /// <summary>
+        /// 直接塞一条会话记录。仅供**离线渲染/单元测试**构造样例时间轴数据用，
+        /// 运行时永远走 <see cref="Load"/> 从 GameActivity 的 json 里读，不会调这里。
+        /// 传进来的是**本地时间**（与 <see cref="AllSessions"/> 的输出口径一致）。
+        /// </summary>
+        public void AddSessionForTest(string key, DateTime localWhen, ulong seconds)
+        {
+            if (string.IsNullOrEmpty(key) || seconds == 0) return;
+            Available = true;
+            lock (sync)
+            {
+                List<KeyValuePair<DateTime, ulong>> target;
+                if (!perGame.TryGetValue(key, out target))
+                {
+                    target = new List<KeyValuePair<DateTime, ulong>>();
+                    perGame[key] = target;
+                }
+                // AllSessions() 会把 key 做 ToLocalTime()，这里存 UTC 保持一致
+                target.Add(new KeyValuePair<DateTime, ulong>(localWhen.ToUniversalTime(), seconds));
+            }
+        }
     }
 
     /// <summary>一次游玩会话（时间轴聚合的原子单位）。</summary>

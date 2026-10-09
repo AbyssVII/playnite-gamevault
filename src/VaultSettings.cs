@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
@@ -7,6 +8,39 @@ using System.Windows.Threading;
 
 namespace GameVault
 {
+    /// <summary>
+    /// 一款游戏的评价：0–10 星的自评分 + 富文本正文。
+    ///
+    /// <see cref="Body"/> 存的是 FlowDocument 的 XAML 片段（TextRange 的 DataFormats.Xaml），
+    /// 里面的插图在存盘前会被替换成占位文本（见 VaultView 里的存/取逻辑），
+    /// 真正的图片文件拷到 <see cref="VaultSettings.ReviewImageDirectory"/> 下，只记文件名。
+    /// </summary>
+    [DataContract]
+    public class GameReview
+    {
+        /// <summary>我的评分，0–10 星（0 = 没打星）。</summary>
+        [DataMember(Name = "Stars")]
+        public int Stars { get; set; }
+
+        /// <summary>正文的 FlowDocument XAML 片段；为空表示没写正文。</summary>
+        [DataMember(Name = "Body")]
+        public string Body { get; set; }
+
+        /// <summary>最后一次修改时间（yyyy-MM-dd HH:mm），只用于展示/排查。</summary>
+        [DataMember(Name = "Updated")]
+        public string Updated { get; set; }
+
+        public GameReview()
+        {
+            Stars = 0;
+        }
+
+        public GameReview Clone()
+        {
+            return new GameReview { Stars = Stars, Body = Body, Updated = Updated };
+        }
+    }
+
     /// <summary>插件的持久化设置（保存在 ExtensionsData\&lt;插件Id&gt;\settings.json）。</summary>
     [DataContract]
     public class GameVaultSettings
@@ -31,15 +65,31 @@ namespace GameVault
         [DataMember(Name = "AnalyzeTopHeight")]
         public double AnalyzeTopHeight { get; set; }
 
-        /// <summary>AI 推荐配置（接口地址 / 密钥 / 模型）。缺省即不启用 AI，只走本地推荐。</summary>
-        [DataMember(Name = "Ai")]
-        public AiConfig Ai { get; set; }
+        /// <summary>分析页「游玩时间轴」面板的高度。0 = 用默认值。</summary>
+        [DataMember(Name = "AnalyzeTimelineHeight")]
+        public double AnalyzeTimelineHeight { get; set; }
+
+        /// <summary>分析页「游戏周报」面板的高度。0 = 用默认值。</summary>
+        [DataMember(Name = "AnalyzeWeeklyHeight")]
+        public double AnalyzeWeeklyHeight { get; set; }
+
+        /// <summary>趣味页的待玩清单：按用户排列的顺序存游戏 Guid 字符串。</summary>
+        [DataMember(Name = "Wishlist")]
+        public List<string> Wishlist { get; set; }
+
+        /// <summary>
+        /// 趣味页的游戏评价：key = 游戏 PrimaryId，value = 星级 + 正文。
+        /// 只记打过星或写过正文的游戏，纯浏览过的不会进来。
+        /// </summary>
+        [DataMember(Name = "Reviews")]
+        public Dictionary<string, GameReview> Reviews { get; set; }
 
         public GameVaultSettings()
         {
             CardWidth = DefaultCardWidth;
             Language = L10n.Zh;
-            Ai = new AiConfig();
+            Wishlist = new List<string>();
+            Reviews = new Dictionary<string, GameReview>();
         }
 
         public static double Clamp(double value)
@@ -78,6 +128,18 @@ namespace GameVault
         public static bool Initialized
         {
             get { lock (Sync) return initialized; }
+        }
+
+        /// <summary>插件数据目录（settings.json 所在目录）。未初始化时返回 null。</summary>
+        public static string DataDirectory
+        {
+            get
+            {
+                lock (Sync)
+                {
+                    return string.IsNullOrEmpty(filePath) ? null : Path.GetDirectoryName(filePath);
+                }
+            }
         }
 
         public static double CardWidth
@@ -124,7 +186,12 @@ namespace GameVault
                                 GameVaultSettings.ClampPanel(loaded.AnalyzeGenreWidth, 0, 300, 1100);
                             loaded.AnalyzeTopHeight =
                                 GameVaultSettings.ClampPanel(loaded.AnalyzeTopHeight, 0, 240, 1400);
-                            if (loaded.Ai == null) loaded.Ai = new AiConfig();
+                            loaded.AnalyzeTimelineHeight =
+                                GameVaultSettings.ClampPanel(loaded.AnalyzeTimelineHeight, 0, 170, 900);
+                            loaded.AnalyzeWeeklyHeight =
+                                GameVaultSettings.ClampPanel(loaded.AnalyzeWeeklyHeight, 0, 190, 620);
+                            if (loaded.Wishlist == null) loaded.Wishlist = new List<string>();
+                            if (loaded.Reviews == null) loaded.Reviews = new Dictionary<string, GameReview>();
                             current = loaded;
                         }
                     }
@@ -180,36 +247,134 @@ namespace GameVault
             ScheduleSave();
         }
 
-        // ---- AI 推荐配置 ----
+        public static double AnalyzeTimelineHeight
+        {
+            get { lock (Sync) return current.AnalyzeTimelineHeight; }
+        }
 
-        /// <summary>取当前 AI 配置的副本（调用方只读，不要直接改）。</summary>
-        public static AiConfig Ai
+        public static void SetAnalyzeTimelineHeight(double value)
+        {
+            lock (Sync)
+            {
+                var clamped = GameVaultSettings.ClampPanel(value, 0, 170, 900);
+                if (Math.Abs(current.AnalyzeTimelineHeight - clamped) < 1) return;
+                current.AnalyzeTimelineHeight = clamped;
+            }
+            ScheduleSave();
+        }
+
+        // ---- 游戏周报 ----
+
+        public static double AnalyzeWeeklyHeight
+        {
+            get { lock (Sync) return current.AnalyzeWeeklyHeight; }
+        }
+
+        public static void SetAnalyzeWeeklyHeight(double value)
+        {
+            lock (Sync)
+            {
+                // 上下限和 XAML 里 RowWeekly 的 MinHeight / 实际可用高度对齐
+                var clamped = GameVaultSettings.ClampPanel(value, 0, 190, 620);
+                if (Math.Abs(current.AnalyzeWeeklyHeight - clamped) < 1) return;
+                current.AnalyzeWeeklyHeight = clamped;
+            }
+            ScheduleSave();
+        }
+
+        // ---- 待玩清单 ----
+
+        /// <summary>清单快照（返回副本，避免调用方无意中改到内部状态）。</summary>
+        public static List<string> Wishlist
+        {
+            get
+            {
+                lock (Sync) return new List<string>(current.Wishlist ?? new List<string>());
+            }
+        }
+
+        public static void SetWishlist(List<string> ids)
+        {
+            lock (Sync)
+            {
+                current.Wishlist = ids == null ? new List<string>() : new List<string>(ids);
+            }
+            ScheduleSave();
+        }
+
+        // ---- 游戏评价 ----
+
+        /// <summary>
+        /// 全部评价的快照（深拷贝，调用方随便改都不会影响内部状态）。
+        /// 顺序不保证 —— 展示顺序由视图按"最近评价的排前面"自己排。
+        /// </summary>
+        public static Dictionary<string, GameReview> Reviews
         {
             get
             {
                 lock (Sync)
                 {
-                    if (current.Ai == null) current.Ai = new AiConfig();
-                    return new AiConfig
+                    var copy = new Dictionary<string, GameReview>();
+                    var source = current.Reviews;
+                    if (source == null) return copy;
+                    foreach (var pair in source)
                     {
-                        Endpoint = current.Ai.Endpoint,
-                        ApiKey = current.Ai.ApiKey,
-                        Model = current.Ai.Model
-                    };
+                        if (pair.Value == null) continue;
+                        copy[pair.Key] = pair.Value.Clone();
+                    }
+                    return copy;
                 }
             }
         }
 
-        public static void SetAi(string endpoint, string apiKey, string model)
+        /// <summary>取某款游戏的评价；没有则返回 null。</summary>
+        public static GameReview GetReview(Guid gameId)
         {
             lock (Sync)
             {
-                if (current.Ai == null) current.Ai = new AiConfig();
-                current.Ai.Endpoint = (endpoint ?? "").Trim();
-                current.Ai.ApiKey = (apiKey ?? "").Trim();
-                current.Ai.Model = (model ?? "").Trim();
+                if (current.Reviews == null) return null;
+                GameReview found;
+                return current.Reviews.TryGetValue(gameId.ToString(), out found) && found != null
+                    ? found.Clone()
+                    : null;
+            }
+        }
+
+        /// <summary>写入 / 覆盖某款游戏的评价。</summary>
+        public static void SetReview(Guid gameId, GameReview review)
+        {
+            lock (Sync)
+            {
+                if (current.Reviews == null) current.Reviews = new Dictionary<string, GameReview>();
+                if (review == null) current.Reviews.Remove(gameId.ToString());
+                else current.Reviews[gameId.ToString()] = review.Clone();
             }
             ScheduleSave();
+        }
+
+        public static void RemoveReview(Guid gameId)
+        {
+            var removed = false;
+            lock (Sync)
+            {
+                if (current.Reviews == null) return;
+                removed = current.Reviews.Remove(gameId.ToString());
+            }
+            if (removed) ScheduleSave();
+        }
+
+        /// <summary>
+        /// 评价里插图的存放目录（DataDirectory\reviews）。放进插件数据目录，
+        /// Playnite 备份扩展数据时会跟着一起带走。返回 null 表示还没初始化。
+        /// </summary>
+        public static string ReviewImageDirectory
+        {
+            get
+            {
+                var dir = DataDirectory;
+                if (string.IsNullOrEmpty(dir)) return null;
+                return Path.Combine(dir, "reviews");
+            }
         }
 
         /// <summary>延迟 600ms 落盘，避免拖动时每一帧都写文件。</summary>

@@ -47,6 +47,34 @@ namespace GameVault
             SnapsToDevicePixels = true;
         }
 
+        /// <summary>
+        /// ⚠️ 让整个控件矩形都参与命中测试，这是"悬停鬼畜"的真正修复点。
+        ///
+        /// FrameworkElement 默认只在 OnRender **画了不透明像素**的地方可命中。
+        /// 于是会发生这样一串连锁反应：
+        ///   ① 鼠标贴到某一瓣的**内侧边缘** → 压到已画出的像素 → OnMouseMove → 该瓣被判定为悬停；
+        ///   ② 悬停的那一瓣会沿中线**外推 PopOut 像素**重绘 → 内侧边缘也跟着往外挪；
+        ///   ③ 鼠标底下那块像素**突然没被画到了** → WPF 判定鼠标离开了控件 → OnMouseLeave；
+        ///   ④ 悬停态被清掉 → 那一瓣**缩回原位** → 鼠标底下又有像素了 → 再次 OnMouseMove；
+        ///   ⑤ 回到 ①，无限循环 —— 就是用户看到的"选中/未选中之间鬼畜"。
+        ///
+        /// 命中测试由 WPF 在派发事件**之前**完成，所以哪怕 HitSlice 的几何判定再稳，
+        /// 也拦不住这个抖动。解法是重写 HitTestCore，声明整个控件矩形都算命中；
+        /// 这样只要鼠标在控件矩形内，OnMouseMove 就一定会触发，
+        /// 落在哪一瓣完全由 HitSlice 决定，状态不再来回跳。
+        ///
+        /// 注意：这里必须重写 HitTestCore —— PieChart 继承的是 FrameworkElement，
+        /// 它没有 Background 属性（那是 Control / Panel 才有的），
+        /// 常见的"设 Background=Transparent"套路在这里用不了。
+        /// </summary>
+        protected override HitTestResult HitTestCore(PointHitTestParameters hitTestParameters)
+        {
+            var point = hitTestParameters.HitPoint;
+            if (point.X >= 0 && point.Y >= 0 && point.X <= ActualWidth && point.Y <= ActualHeight)
+                return new PointHitTestResult(this, point);
+            return null;
+        }
+
         /// <summary>设置数据。label 是环形中心的标题与主数值。</summary>
         public void SetData(List<GenreSlice> data, string title, string value)
         {
@@ -61,6 +89,40 @@ namespace GameVault
         {
             hoveredIndex = index;
             ApplyHighlight();
+        }
+
+        /// <summary>
+        /// 离线段测试用的命中探针：按给定画布尺寸算某个点落在哪一瓣。
+        /// 不依赖真实布局（ActualWidth/Height 在无头环境里拿不到），
+        /// 因此显式传入尺寸，逻辑与 <see cref="OnMouseMove"/> 里的判定完全一致。
+        /// </summary>
+        public int HitTestAt(Point point, Size size)
+        {
+            return HitSlice(point, size);
+        }
+
+        /// <summary>
+        /// 离线段测试：模拟"鼠标停在某点不动"时的事件循环，看悬停态会不会来回抖。
+        /// 每一轮都把上一轮的结果写回 <see cref="hoveredIndex"/>（模拟控件按当前悬停态
+        /// 重绘、下一帧再判定同一点），若在选中/未选中之间反复切换就是鬼畜。
+        /// </summary>
+        public bool HoverIsStable(Point point, Size size, out int resultIndex, out int flips)
+        {
+            var saved = hoveredIndex;
+            flips = 0;
+            hoveredIndex = -1;
+            var prev = HitSlice(point, size);
+            hoveredIndex = prev;                       // 第一帧命中 → 控件认为"已悬停"
+            for (var k = 0; k < 12; k++)
+            {
+                var cur = HitSlice(point, size);       // 鼠标没动，按新状态再判定
+                if (cur != prev) flips++;
+                prev = cur;
+                hoveredIndex = cur;                    // 状态推进到下一帧
+            }
+            resultIndex = prev;
+            hoveredIndex = saved;
+            return flips == 0;
         }
 
         private void Rebuild()
@@ -138,6 +200,7 @@ namespace GameVault
         protected override void OnMouseLeave(System.Windows.Input.MouseEventArgs e)
         {
             base.OnMouseLeave(e);
+            Cursor = null;
             if (hoveredIndex == -1) return;
             hoveredIndex = -1;
             ApplyHighlight();
@@ -149,6 +212,12 @@ namespace GameVault
             var index = HitSlice(e.GetPosition(this));
             if (index >= 0 && SliceClicked != null) SliceClicked(index);
             else if (SliceClicked != null) SliceClicked(-1);
+        }
+
+        /// <summary>按控件当前实际尺寸做命中判定（事件里用）。</summary>
+        private int HitSlice(Point point)
+        {
+            return HitSlice(point, new Size(ActualWidth, ActualHeight));
         }
 
         private void ApplyHighlight()
@@ -166,30 +235,58 @@ namespace GameVault
             InvalidateVisual();
         }
 
-        /// <summary>判断某个点落在哪一瓣上（只认环形那一圈，中心空洞不响应）。</summary>
-        private int HitSlice(Point point)
+        /// <summary>
+        /// 判断某个点落在哪一瓣上（只认环形那一圈，中心空洞不响应）。
+        ///
+        /// ⚠️ 关键点：悬停中的那一瓣在绘制时被沿中线**外推了 PopOut 像素**。
+        /// 如果命中判定还按未外推的圆环来算，鼠标就会在
+        ///   「刚好压住这一瓣」→ 这一瓣弹出去 → 鼠标落到空处 → 收回 → 又压住
+        /// 之间无限来回，也就是用户看到的「鬼畜抖动」。
+        ///
+        /// 解法：命中判定取「静止位置」和「弹出后位置」两块环形区域的**并集**。
+        /// 角度不随弹出变化（只沿半径平移），所以角度判定是稳定的；
+        /// 只要鼠标还落在任何一个候选半径带里，就保持这一瓣为悬停态，状态不再抖动。
+        /// </summary>
+        private int HitSlice(Point point, Size canvasSize)
         {
-            var size = Math.Min(ActualWidth, ActualHeight);
+            var size = Math.Min(canvasSize.Width, canvasSize.Height);
             if (size <= 0) return -1;
 
-            var center = new Point(ActualWidth / 2, ActualHeight / 2);
-            var outer = size / 2 - PopOut - 1;
+            var center = new Point(canvasSize.Width / 2, canvasSize.Height / 2);
             var dx = point.X - center.X;
             var dy = point.Y - center.Y;
             var distance = Math.Sqrt(dx * dx + dy * dy);
-            if (distance > outer || distance < outer - Thickness) return -1;
 
             // -90 是因为 0° 要落在 12 点方向，而不是 3 点
             var angle = Math.Atan2(dy, dx) * 180 / Math.PI + 90;
             if (angle < 0) angle += 360;
 
+            // 角度 → 第几瓣（与是否弹出无关，稳定）
+            var angleIndex = -1;
             var cursor = 0.0;
             foreach (var visual in visuals)
             {
                 var sweep = visual.Share * 360;
-                if (angle >= cursor && angle < cursor + sweep) return visual.Index;
+                if (angle >= cursor && angle < cursor + sweep) { angleIndex = visual.Index; break; }
                 cursor += sweep;
             }
+
+            var outerBase = size / 2 - PopOut - 1;
+            var innerBase = outerBase - Thickness;
+
+            // ① 静止位置：常规判定。命中就直接返回。
+            if (distance <= outerBase && distance >= innerBase) return angleIndex;
+
+            // ② 弹出后位置：仅对**当前悬停的那一瓣**生效。
+            //    半径带整体外移，且两侧各留 PopOut 的余量，
+            //    这样即便鼠标卡在内外边缘、动画正在推进，也不会掉出命中区。
+            if (hoveredIndex >= 0 && angleIndex == hoveredIndex && hoveredIndex < visuals.Count)
+            {
+                if (distance <= outerBase + PopOut + 1
+                    && distance >= Math.Max(0, innerBase - PopOut - 1))
+                    return hoveredIndex;
+            }
+
             return -1;
         }
 

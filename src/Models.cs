@@ -55,8 +55,10 @@ namespace GameVault
             { "gog",         new[] { "GOG",      "#B48BFF" } },
             { "playstation", new[] { "PSN",      "#5B8DEF" } },
             { "nintendo",    new[] { "Nintendo", "#FF5C6C" } },
-            { "battle.net",  new[] { "战网",      "#3FA9F5" } },
-            { "battlenet",   new[] { "战网",      "#3FA9F5" } },
+            { "battle.net",  new[] { "Battle.net", "#3FA9F5" } },
+            { "battlenet",   new[] { "Battle.net", "#3FA9F5" } },
+            // Playnite 中文语言包里 Battle.net 的来源名就叫"战网"，徽章要显示原品牌名
+            { "战网",         new[] { "Battle.net", "#3FA9F5" } },
             { "amazon",      new[] { "Amazon",   "#FFA53C" } },
             { "itch",        new[] { "itch.io",  "#FF7A7A" } },
             { "rockstar",    new[] { "RGL",      "#F5C542" } },
@@ -265,10 +267,56 @@ namespace GameVault
             if (phase >= 1) phase -= 1;
             return phase;
         }
+
+        // ------------------------------------------------------------------
+        // 共享的「流光」画刷
+        //
+        // 每张卡片各自持有一份彩虹渐变会很浪费（几十张卡 = 几十个动画对象），
+        // 而 MC 分数分布卡这类**非卡片**的地方也想要同样的流光效果。
+        // 所以这里提供一份全局共享的实例：所有想显示 90+ 流光的元素绑同一个画刷，
+        // 由 <see cref="ApplySharedFlow"/> 统一切换相位，视觉上与封面徽章完全同步。
+        // ------------------------------------------------------------------
+
+        private static LinearGradientBrush sharedBrush;
+        private static TranslateTransform sharedFlow;
+
+        /// <summary>
+        /// 全局共享的 90+ 流光画刷（横向彩虹渐变 + 相位平移无缝循环）。
+        /// 封面右上角的评分徽章、MC 分数分布卡的色点与数字都绑它，
+        /// 保证同一时刻颜色完全一致。
+        /// </summary>
+        public static Brush SharedFlow
+        {
+            get
+            {
+                if (sharedBrush == null)
+                {
+                    sharedFlow = new TranslateTransform(0, 0);
+                    var gradient = new LinearGradientBrush
+                    {
+                        StartPoint = new Point(0, 0),
+                        EndPoint = new Point(1, 0),
+                        SpreadMethod = GradientSpreadMethod.Repeat,
+                        RelativeTransform = sharedFlow
+                    };
+                    FillFlowStops(gradient.GradientStops);
+                    sharedBrush = gradient;
+                }
+                return sharedBrush;
+            }
+        }
+
+        /// <summary>推进共享流光的相位。由视图的定时器每帧调用一次。</summary>
+        public static void ApplySharedFlow(double phase)
+        {
+            if (sharedFlow != null) sharedFlow.X = phase;
+        }
     }
 
     /// <summary>类型饼图的配色。刻意避开 ScorePalette 里已用于评分的红/黄/橙/绿，
-    /// 免得用户把"类型颜色"误读成"评分高低"。</summary>
+    /// 免得用户把"类型颜色"误读成"评分高低"。
+    /// 类型不再合并成「其他」，所以配色表给得比较长（24 色），
+    /// 覆盖绝大多数真实库存的类型数，只有极端的库才会回到表头循环。</summary>
     public static class GenrePalette
     {
         public static readonly string[] Colors =
@@ -282,9 +330,22 @@ namespace GameVault
             "#FB923C",  // 橙棕
             "#C084FC",  // 淡紫
             "#34D399",  // 翠绿
+            "#38BDF8",  // 天蓝
+            "#E879F9",  // 品红
+            "#5EEAD4",  // 浅青
+            "#FCA5A5",  // 浅珊瑚
+            "#93C5FD",  // 浅蓝
+            "#D8B4FE",  // 浅紫
+            "#6EE7B7",  // 薄荷
+            "#FDBA74",  // 杏色
+            "#7DD3FC",  // 浅天蓝
+            "#F9A8D4",  // 浅粉
+            "#A5B4FC",  // 蓝紫
+            "#FDE047",  // 柠檬
+            "#22D3EE",  // 青蓝
+            "#FDA4AF",  // 玫瑰
+            "#BEF264",  // 黄绿
         };
-
-        public const string Other = "#64748B";
     }
 
     /// <summary>库存中的一条游戏记录（同一名称的多个平台副本会被合并）</summary>
@@ -294,20 +355,33 @@ namespace GameVault
 
         private const int CoverWidth = 220;
         private const int PosterWidth = 640;
+        private const int IconWidth = 96;
 
         private ImageSource cover;
         private ImageSource poster;
+        private ImageSource icon;
         private LinearGradientBrush animatedBrush;
         private TranslateTransform flowTransform;
         private bool coverRequested;
         private bool posterRequested;
+        private bool iconRequested;
         private double recentPercent;
         private double totalPercent;
 
         public Guid PrimaryId { get; set; }
         public string Name { get; set; }
+
+        /// <summary>主条目的库来源名（Steam / Epic / Steam Family Sharing …），未设置为 null</summary>
+        public string SourceName { get; set; }
         public ulong TotalPlaytime { get; set; }
         public ulong RecentPlaytime { get; set; }
+
+        /// <summary>
+        /// Steam AppID（0 = 未知）。来自 Playnite 的 Steam 来源 GameId，
+        /// 或 Links 里的 store.steampowered.com/app/&lt;id&gt;。
+        /// 有它就按 AppID 精确查价格，没有才退化成按名字搜索。
+        /// </summary>
+        public long SteamAppId { get; set; }
 
         /// <summary>
         /// 该条目对应（合并前）的所有游戏 Id，字符串形式。
@@ -516,7 +590,45 @@ namespace GameVault
             }
         }
 
-        public ImageSource Icon => ImageCache.TryGet(IconPath, 48);
+        /// <summary>
+        /// 图标（小方图，用于下拉列表这类窄条位置）。
+        ///
+        /// 和封面 / 海报同一套懒加载：命中缓存同步返回，否则后台解码，
+        /// 完成后 <see cref="Raise"/> 通知绑定刷新。
+        /// 千万别写成「只查缓存」的属性 —— 那样首次访问必然返回 null，
+        /// 而调用方绑的是包装类，通知传不回去，图标就永远是一片空白。
+        /// 图标文件缺失时退回封面，保证窄条里至少有个图。
+        /// </summary>
+        public ImageSource Icon
+        {
+            get
+            {
+                if (icon != null) return icon;
+                if (iconRequested) return icon;
+                iconRequested = true;
+                var direct = ImageCache.TryGet(IconPath, IconWidth);
+                if (direct != null)
+                {
+                    icon = direct;
+                    return icon;
+                }
+                ImageCache.LoadAsync(IconPath, IconWidth, src =>
+                {
+                    if (src != null || string.IsNullOrEmpty(CoverPath) || CoverPath == IconPath)
+                    {
+                        icon = src;
+                        Raise("Icon");
+                        return;
+                    }
+                    ImageCache.LoadAsync(CoverPath, IconWidth, cover =>
+                    {
+                        icon = cover;
+                        Raise("Icon");
+                    });
+                });
+                return null;
+            }
+        }
 
         public List<StoreBadge> Badges
         {
@@ -552,9 +664,6 @@ namespace GameVault
         /// <summary>该类型下的游戏款数（合并平台副本后）</summary>
         public int GameCount { get; set; }
 
-        /// <summary>是否是"其他"兜底切片（配色与文案不同）</summary>
-        public bool IsOther { get; set; }
-
         /// <summary>该类型的总时长（秒）</summary>
         public ulong Playtime { get; set; }
 
@@ -570,6 +679,30 @@ namespace GameVault
 
         /// <summary>饼图几何数据（由 PieChart 填充）</summary>
         public string Geometry { get; set; }
+    }
+
+    /// <summary>「总游戏时长」浮窗里的一行：一个库（Steam / Epic / Xbox …）的总时长。</summary>
+    public class SourcePlayRow
+    {
+        public string Name { get; set; }
+
+        /// <summary>该库的游戏总时长（秒）</summary>
+        public ulong Seconds { get; set; }
+
+        /// <summary>预生成的展示文案（如 865h 1m）</summary>
+        public string Text { get; set; }
+    }
+
+    /// <summary>「库存总数」浮窗里的一行：一个库有多少款游戏、占库存的百分之几。</summary>
+    public class SourceCountRow
+    {
+        public string Name { get; set; }
+
+        /// <summary>该库的游戏款数（合并平台副本后）</summary>
+        public int Count { get; set; }
+
+        /// <summary>预生成的占比文案（如 23%）</summary>
+        public string ShareText { get; set; }
     }
 
     /// <summary>
@@ -610,6 +743,13 @@ namespace GameVault
         public double AverageScore;
         public int HighScoreCount;    // >= 85
         public int LowScoreCount;     // < 70
+
+        /// <summary>MC 分数分布：90+ / 80-89 / 70-79 / 60-69 / &lt;60 的款数（与 GameEntry.ScoreTier 同口径）</summary>
+        public int ScoreBucket90;
+        public int ScoreBucket80;
+        public int ScoreBucket70;
+        public int ScoreBucket60;
+        public int ScoreBucketLow;
 
         // ---- 结构 ----
         public int BacklogAgeDays;    // 最早入库的未玩游戏距今天数
@@ -656,27 +796,6 @@ namespace GameVault
         public int InstalledUnplayed;
     }
 
-    /// <summary>分析页「推荐」卡片的一行：一款被推荐的游戏 + 推荐理由。</summary>
-    public class RecommendRow
-    {
-        public GameEntry Entry { get; set; }
-
-        /// <summary>推荐理由，如「同类型 · 92 分 · 已入库未玩」</summary>
-        public string Reason { get; set; }
-
-        /// <summary>
-        /// true = 推荐的游戏**不在用户库里**（AI / 知识库给出的库外作品）；
-        /// false = 来自用户自己的库存。两种卡片样式不同（库外的显示"可入库/尝试"标识）。
-        /// </summary>
-        public bool IsExternal { get; set; }
-
-        /// <summary>库外推荐时的游戏名（因为 Entry 为 null）。</summary>
-        public string ExternalName { get; set; }
-
-        /// <summary>库外推荐时所属的类型标签。</summary>
-        public string ExternalGenre { get; set; }
-    }
-
     // ==================================================================
     // 游玩时间轴（周维度）
     // ==================================================================
@@ -713,9 +832,16 @@ namespace GameVault
         public string TopNameText { get; set; }    // 冠军游戏名
         public string TopTimeText { get; set; }    // 冠军游玩时长
         public string WeekLabel { get; set; }      // "8/24"（该周周一）
+        public string WeekRangeLabel { get; set; } // "8/24-8/30"（整周区间：周一 ~ 周日）
         public string MonthLabel { get; set; }     // "9 月"（仅当月第一周有值）
         public bool IsEmpty { get; set; }          // 当周无记录
         public bool IsCurrent { get; set; }        // 是否本周
+
+        /// <summary>
+        /// 当周冠军游戏占该周总时长的百分比文案（"62%"）。
+        /// 周报的悬停卡要显示这个，所以放在这里由聚合层算好。
+        /// </summary>
+        public string TopShareText { get; set; }
 
         /// <summary>
         /// 聚合中间状态：该周每款游戏的累计秒数。
@@ -728,7 +854,8 @@ namespace GameVault
     /// <summary>时间轴上的一个月份分组（用于画月份分隔标签）。</summary>
     public class MonthGroup
     {
-        public string Label { get; set; }          // "2026 年 9 月"
+        public string Label { get; set; }          // "2026 年 9 月"（完整，含年份）
+        public string ShortLabel { get; set; }     // "9 月"（只留月份，时间轴上用 —— 年份已在标题/选择器给出）
         public int StartIndex { get; set; }        // 在 Weeks 列表中的起始下标
         public int WeekCount { get; set; }
         /// <summary>该月总时长。</summary>
@@ -759,6 +886,9 @@ namespace GameVault
 
         /// <summary>数据是否可用（没有 GameActivity 时整块显示空态）。</summary>
         public bool Available { get; set; }
+
+        /// <summary>这一份时间轴对应哪一年（0 = 未指定）。</summary>
+        public int Year { get; set; }
 
         public string TotalText { get; set; }
         public string SpanText { get; set; }

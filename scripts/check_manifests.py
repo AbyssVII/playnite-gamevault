@@ -79,6 +79,23 @@ def main():
           "RequiredApiVersion 为 .NET 版本串：%s" % installer["Packages"][0]["RequiredApiVersion"])
 
     print()
+    print("=== 2b. Changelog 的 YAML 陷阱 ===")
+    # 逐行扫描原始文本：changelog 条目若以 '*' 开头，YAML 会把它当成别名引用（alias）
+    # 而抛 ScannerError —— 而条目内容常常带 markdown 加粗，非常容易手滑写成行首 **。
+    # 注意：只有 '*' 出现在**行首**（去掉 "- " 之后紧随 '*'）才致命；
+    # 写在句中（如「库存页**未安装…**」）完全安全。
+    with open(os.path.join(ROOT, "manifests", "installer.yaml"), encoding="utf-8") as handle:
+        raw_installer = handle.read()
+    bad_lines = []
+    for lineno, line in enumerate(raw_installer.splitlines(), 1):
+        stripped = line.lstrip()
+        if stripped.startswith("-") and stripped[1:].lstrip().startswith("*"):
+            bad_lines.append("%d: %s" % (lineno, stripped[:40]))
+    check(not bad_lines,
+          "changelog 没有行首 '*' 的条目（会被 YAML 当成 alias 解析失败）"
+          + ("" if not bad_lines else "；问题行 " + " | ".join(bad_lines)))
+
+    print()
     print("=== 3. 交叉一致性（最容易出错的地方）===")
     check(addon.get("AddonId") == ext.get("Id"),
           "addon.AddonId 与 extension.yaml 的 Id 一致")
